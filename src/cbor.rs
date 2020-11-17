@@ -2,7 +2,7 @@
 
 use std::{
     convert::{TryFrom, TryInto},
-    io, iter,
+    io,
 };
 
 use crate::{Error, Result};
@@ -13,36 +13,24 @@ const RECURSION_LIMIT: u32 = 1000;
 /// Cbor type parametrised over list type and map type. Use one of the
 /// conversion trait to convert language-native-type to a Cbor variant.
 #[derive(Clone)]
-pub enum Cbor<L, D> {
-    Major0(Info, u64),         // uint 0-23,24,25,26,27
-    Major1(Info, u64),         // nint 0-23,24,25,26,27
-    Major2(Info, Vec<u8>),     // byts 0-23,24,25,26,27,31
-    Major3(Info, Vec<u8>),     // text 0-23,24,25,26,27,31
-    Major4(Info, L),           // list 0-23,24,25,26,27,31
-    Major5(Info, D),           // dict 0-23,24,25,26,27,31
-    Major6(Info, Tag),         // tags similar to major0
-    Major7(Info, SimpleValue), // type refer SimpleValue
+pub enum Cbor {
+    Major0(Info, u64),              // uint 0-23,24,25,26,27
+    Major1(Info, u64),              // nint 0-23,24,25,26,27
+    Major2(Info, Vec<u8>),          // byts 0-23,24,25,26,27,31
+    Major3(Info, Vec<u8>),          // text 0-23,24,25,26,27,31
+    Major4(Info, Vec<Cbor>),        // list 0-23,24,25,26,27,31
+    Major5(Info, Vec<(Key, Cbor)>), // dict 0-23,24,25,26,27,31
+    Major6(Info, Tag),              // tags similar to major0
+    Major7(Info, SimpleValue),      // type refer SimpleValue
 }
 
-impl<L, D> Cbor<L, D> {
+impl Cbor {
     /// Serialize this cbor value.
-    pub fn encode(self, buf: &mut Vec<u8>) -> Result<usize>
-    where
-        L: iter::IntoIterator<Item = Cbor<L, D>>,
-        D: iter::IntoIterator<Item = (Key, Cbor<L, D>)>,
-        <L as iter::IntoIterator>::IntoIter: iter::ExactSizeIterator,
-        <D as iter::IntoIterator>::IntoIter: iter::ExactSizeIterator,
-    {
+    pub fn encode(self, buf: &mut Vec<u8>) -> Result<usize> {
         self.do_encode(buf, 1)
     }
 
-    fn do_encode(self, buf: &mut Vec<u8>, depth: u32) -> Result<usize>
-    where
-        L: iter::IntoIterator<Item = Cbor<L, D>>,
-        D: iter::IntoIterator<Item = (Key, Cbor<L, D>)>,
-        <L as iter::IntoIterator>::IntoIter: iter::ExactSizeIterator,
-        <D as iter::IntoIterator>::IntoIter: iter::ExactSizeIterator,
-    {
+    fn do_encode(&self, buf: &mut Vec<u8>, depth: u32) -> Result<usize> {
         if depth > RECURSION_LIMIT {
             return err_at!(FailCbor, msg: "encode recursion limit exceeded");
         }
@@ -50,54 +38,52 @@ impl<L, D> Cbor<L, D> {
         let major = self.to_major_val();
         match self {
             Cbor::Major0(info, num) => {
-                let n = encode_hdr(major, info, buf)?;
-                Ok(n + encode_addnl(num, buf)?)
+                let n = encode_hdr(major, *info, buf)?;
+                Ok(n + encode_addnl(*num, buf)?)
             }
             Cbor::Major1(info, num) => {
-                let n = encode_hdr(major, info, buf)?;
-                Ok(n + encode_addnl(num, buf)?)
+                let n = encode_hdr(major, *info, buf)?;
+                Ok(n + encode_addnl(*num, buf)?)
             }
             Cbor::Major2(info, byts) => {
-                let n = encode_hdr(major, info, buf)?;
+                let n = encode_hdr(major, *info, buf)?;
                 let m = encode_addnl(err_at!(FailConvert, u64::try_from(byts.len()))?, buf)?;
                 buf.copy_from_slice(&byts);
                 Ok(n + m + byts.len())
             }
             Cbor::Major3(info, text) => {
-                let n = encode_hdr(major, info, buf)?;
+                let n = encode_hdr(major, *info, buf)?;
                 let m = encode_addnl(err_at!(FailCbor, u64::try_from(text.len()))?, buf)?;
                 buf.copy_from_slice(&text);
                 Ok(n + m + text.len())
             }
             Cbor::Major4(info, list) => {
-                let iter = list.into_iter();
-                let n = encode_hdr(major, info, buf)?;
-                let m = encode_addnl(err_at!(FailConvert, u64::try_from(iter.len()))?, buf)?;
+                let n = encode_hdr(major, *info, buf)?;
+                let m = encode_addnl(err_at!(FailConvert, u64::try_from(list.len()))?, buf)?;
                 let mut acc = 0;
-                for x in iter {
+                for x in list.iter() {
                     acc += x.do_encode(buf, depth + 1)?;
                 }
                 Ok(n + m + acc)
             }
             Cbor::Major5(info, map) => {
-                let iter = map.into_iter();
-                let n = encode_hdr(major, info, buf)?;
-                let m = encode_addnl(err_at!(FailConvert, u64::try_from(iter.len()))?, buf)?;
+                let n = encode_hdr(major, *info, buf)?;
+                let m = encode_addnl(err_at!(FailConvert, u64::try_from(map.len()))?, buf)?;
                 let mut acc = 0;
-                for (key, val) in iter {
-                    let key: Cbor<L, D> = key.clone().try_into()?;
+                for (key, val) in map.iter() {
+                    let key: Cbor = key.clone().try_into()?;
                     acc += key.do_encode(buf, depth + 1)?;
                     acc += val.do_encode(buf, depth + 1)?;
                 }
                 Ok(n + m + acc)
             }
             Cbor::Major6(info, tagg) => {
-                let n = encode_hdr(major, info, buf)?;
+                let n = encode_hdr(major, *info, buf)?;
                 let m = tagg.encode(buf)?;
                 Ok(n + m)
             }
             Cbor::Major7(info, sval) => {
-                let n = encode_hdr(major, info, buf)?;
+                let n = encode_hdr(major, *info, buf)?;
                 let m = sval.encode(buf)?;
                 Ok(n + m)
             }
@@ -105,19 +91,11 @@ impl<L, D> Cbor<L, D> {
     }
 
     /// Deserialize a bytes from reader `r` to Cbor value.
-    pub fn decode<R: io::Read>(r: &mut R) -> Result<Cbor<L, D>>
-    where
-        L: iter::FromIterator<Cbor<L, D>>,
-        D: iter::FromIterator<(Key, Cbor<L, D>)>,
-    {
+    pub fn decode<R: io::Read>(r: &mut R) -> Result<Cbor> {
         Self::do_decode(r, 1)
     }
 
-    fn do_decode<R: io::Read>(r: &mut R, depth: u32) -> Result<Cbor<L, D>>
-    where
-        L: iter::FromIterator<Cbor<L, D>>,
-        D: iter::FromIterator<(Key, Cbor<L, D>)>,
-    {
+    fn do_decode<R: io::Read>(r: &mut R, depth: u32) -> Result<Cbor> {
         if depth > RECURSION_LIMIT {
             return err_at!(FailCbor, msg: "decode recursion limt exceeded");
         }
@@ -162,25 +140,25 @@ impl<L, D> Cbor<L, D> {
                 Cbor::Major3(info, text)
             }
             (4, Info::Indefinite) => {
-                let mut list: Vec<Cbor<L, D>> = vec![];
+                let mut list: Vec<Cbor> = vec![];
                 loop {
                     match Self::do_decode(r, depth + 1)? {
                         Cbor::Major7(_, SimpleValue::Break) => break,
                         item => list.push(item),
                     }
                 }
-                Cbor::Major4(info, L::from_iter(list.into_iter()))
+                Cbor::Major4(info, list)
             }
             (4, info) => {
-                let mut list: Vec<Cbor<L, D>> = vec![];
+                let mut list: Vec<Cbor> = vec![];
                 let n = decode_addnl(info, r)?;
                 for _ in 0..n {
                     list.push(Self::do_decode(r, depth + 1)?);
                 }
-                Cbor::Major4(info, L::from_iter(list.into_iter()))
+                Cbor::Major4(info, list)
             }
             (5, Info::Indefinite) => {
-                let mut map: Vec<(Key, Cbor<L, D>)> = Vec::default();
+                let mut map: Vec<(Key, Cbor)> = Vec::default();
                 loop {
                     let key = Self::do_decode(r, depth + 1)?.try_into()?;
                     let val = match Self::do_decode(r, depth + 1)? {
@@ -189,17 +167,17 @@ impl<L, D> Cbor<L, D> {
                     };
                     map.push((key, val));
                 }
-                Cbor::Major5(info, D::from_iter(map.into_iter()))
+                Cbor::Major5(info, map)
             }
             (5, info) => {
-                let mut map: Vec<(Key, Cbor<L, D>)> = Vec::default();
+                let mut map: Vec<(Key, Cbor)> = Vec::default();
                 let n = decode_addnl(info, r)?;
                 for _ in 0..n {
                     let key = Self::do_decode(r, depth + 1)?.try_into()?;
                     let val = Self::do_decode(r, depth + 1)?;
                     map.push((key, val));
                 }
-                Cbor::Major5(info, D::from_iter(map.into_iter()))
+                Cbor::Major5(info, map)
             }
             (6, info) => Cbor::Major6(info, Tag::decode(info, r)?),
             (7, info) => Cbor::Major7(info, SimpleValue::decode(info, r)?),
@@ -390,10 +368,10 @@ pub enum SimpleValue {
     Break, // 31
 }
 
-impl<L, D> TryFrom<SimpleValue> for Cbor<L, D> {
+impl TryFrom<SimpleValue> for Cbor {
     type Error = Error;
 
-    fn try_from(sval: SimpleValue) -> Result<Cbor<L, D>> {
+    fn try_from(sval: SimpleValue) -> Result<Cbor> {
         use SimpleValue::*;
 
         let val = match sval {
@@ -517,10 +495,10 @@ pub enum Key {
     F64(f64),
 }
 
-impl<L, D> TryFrom<Key> for Cbor<L, D> {
+impl TryFrom<Key> for Cbor {
     type Error = Error;
 
-    fn try_from(key: Key) -> Result<Cbor<L, D>> {
+    fn try_from(key: Key) -> Result<Cbor> {
         let val = match key {
             Key::U64(key) => Cbor::Major0(key.into(), key),
             Key::N64(key) if key >= 0 => {
@@ -543,10 +521,10 @@ impl<L, D> TryFrom<Key> for Cbor<L, D> {
     }
 }
 
-impl<L, D> TryFrom<Cbor<L, D>> for Key {
+impl TryFrom<Cbor> for Key {
     type Error = Error;
 
-    fn try_from(val: Cbor<L, D>) -> Result<Key> {
+    fn try_from(val: Cbor) -> Result<Key> {
         use std::str::from_utf8;
 
         let key = match val {
