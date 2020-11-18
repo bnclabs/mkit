@@ -53,6 +53,7 @@ macro_rules! err_at {
 
 pub mod cbor;
 pub mod traits;
+pub mod util;
 
 /// Error variants that can be returned by this package's API.
 ///

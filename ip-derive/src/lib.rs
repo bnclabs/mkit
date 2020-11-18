@@ -29,101 +29,51 @@ fn impl_cborize_type(input: &DeriveInput) -> TokenStream {
 }
 
 fn from_type_to_cbor(name: &Ident, fields: &FieldsNamed) -> TokenStream {
-    let mut token_builder = quote! {};
+    let mut token_builder = quote! {
+        let key = cbor::Key::Text("__msg_name".to_string());
+        let val: Cbor = #name.to_lower_case().try_into()?;
+        props.push((key, val));
+    };
     for field in fields.named.iter() {
-        token_builder.extend(to_json_property(field));
+        token_builder.extend(to_cbor_property(field));
     }
 
     quote! {
-        impl ::std::convert::From<#name> for ::jsondata::Json {
-            fn from(value: #name) -> ::jsondata::Json {
-                let mut props: Vec<::jsondata::Property> = vec![];
+        impl #name {
+            pub fn to_cbor_msg_name(&self) -> String {
+                ::ip_tools::utils::to_snake_case(#name)
+            }
+        }
+
+        impl ::std::convert::TryFrom<#name> for ::ip_tools::cbor::Cbor {
+            type Error = ::ip_tools::cbor::Error;
+
+            fn try_from(value: #name) -> ::ip_tools::cbor::Cbor {
+                let mut props: Vec<(::ip_tools::cbor::Key, ::ip_tools::cbor::Cbor)> = vec![];
                 #token_builder;
-                ::jsondata::Json::new(props)
+                Ok(props.try_into()?)
             }
         }
     }
 }
 
-fn to_json_property(field: &Field) -> TokenStream {
+fn to_cbor_property(field: &Field) -> TokenStream {
     match &field.ident {
         Some(field_name) => {
-            let key = field_name.to_string().to_lowercase();
-            let is_from_str = get_from_str(&field.attrs);
-            match (is_from_str, get_try_into(&field.attrs)) {
-                (true, _) => quote! {
-                    let v: Json = value.#field_name.to_string().into();
-                    props.push(::jsondata::Property::new(#key, v));
-                },
-                (false, Some(intr_type)) => quote! {
-                    let v: #intr_type = value.#field_name.try_into().unwrap();
-                    let v: Json = v.into();
-                    props.push(::jsondata::Property::new(#key, v));
-                },
-                (false, None) => quote! {
-                    let v = value.#field_name.into();
-                    props.push(::jsondata::Property::new(#key, v));
-                },
-            }
+            let key = cbor::Key::Text(field_name.to_string().to_lowercase());
+            let val: ::ip_tools::cbor::Cbor = value.#field_name.try_into()?;
+            props.push((key, val))
         }
         None => TokenStream::new(),
     }
 }
 
-fn get_from_str(attrs: &[syn::Attribute]) -> bool {
-    if attrs.len() == 0 {
-        return false;
-    }
-    match attrs[0].parse_meta().unwrap() {
-        syn::Meta::List(meta_list) => {
-            let mut iter = meta_list.nested.iter();
-            'outer: loop {
-                if let Some(syn::NestedMeta::Meta(syn::Meta::Path(p))) = iter.next() {
-                    for seg in p.segments.iter() {
-                        if seg.ident.to_string() == "from_str" {
-                            break 'outer true;
-                        } else if seg.ident.to_string() == "to_string" {
-                            break 'outer true;
-                        }
-                    }
-                } else {
-                    break 'outer false;
-                }
-            }
-        }
-        _ => false,
-    }
-}
-
-fn get_try_into(attrs: &[syn::Attribute]) -> Option<syn::Type> {
-    if attrs.len() == 0 {
-        return None;
-    }
-    let nv = match attrs[0].parse_meta().unwrap() {
-        syn::Meta::List(meta_list) => {
-            let mut iter = meta_list.nested.iter();
-            loop {
-                match iter.next()? {
-                    syn::NestedMeta::Meta(syn::Meta::NameValue(nv)) => break Some(nv.clone()),
-                    _ => continue,
-                }
-            }
-        }
-        _ => None,
-    }?;
-
-    let segs: Vec<&syn::PathSegment> = nv.path.segments.iter().collect();
-    if segs.first().unwrap().ident.to_string() == "try_into" {
-        Some(match &nv.lit {
-            syn::Lit::Str(s) => s.parse().unwrap(),
-            _ => panic!("invalid literal"),
-        })
-    } else {
-        None
-    }
-}
-
-fn from_json_to_type(name: &Ident, fields: &FieldsNamed) -> TokenStream {
+fn from_cbor_to_type(name: &Ident, fields: &FieldsNamed) -> TokenStream {
+    let mut token_builder = quote! {
+        let key = cbor::Key::Text("__msg_name".to_string());
+        let val: Cbor = #name.to_lower_case().try_into()?;
+        props.push((key, val));
+    };
     let mut token_builder = quote! {};
     for field in fields.named.iter() {
         token_builder.extend(to_type_field(field));

@@ -27,7 +27,7 @@ pub enum Cbor {
 
 impl Cbor {
     /// Serialize this cbor value.
-    pub fn encode(self, buf: &mut Vec<u8>) -> Result<usize> {
+    pub fn encode(&self, buf: &mut Vec<u8>) -> Result<usize> {
         self.do_encode(buf, 1)
     }
 
@@ -204,6 +204,14 @@ impl Cbor {
             Cbor::Major6(_, _) => 6,
             Cbor::Major7(_, _) => 7,
             Cbor::Binary(data) => (data[0] & 0xe0) >> 5,
+        }
+    }
+
+    /// Convert cbor into optional value of type T.
+    pub fn to_optional<T: TryFrom<Cbor, Error = Error>>(self) -> Result<Option<T>> {
+        match self {
+            Cbor::Major7(_, SimpleValue::Null) => Ok(None),
+            val => Ok(Some(val.try_into()?)),
         }
     }
 }
@@ -563,6 +571,27 @@ impl<T: Clone + Into<Cbor>, const N: usize> TryFrom<[T; N]> for Cbor {
     }
 }
 
+impl<T: Copy + Default + TryFrom<Cbor, Error = Error>, const N: usize> TryFrom<Cbor> for [T; N] {
+    type Error = Error;
+
+    fn try_from(val: Cbor) -> Result<[T; N]> {
+        let mut arr = [T::default(); N];
+        let n = arr.len();
+        match val {
+            Cbor::Major4(_, data) if n == data.len() => {
+                for (i, item) in data.into_iter().enumerate() {
+                    arr[i] = item.try_into()?;
+                }
+                Ok(arr)
+            }
+            Cbor::Major4(_, data) => {
+                err_at!(FailConvert, msg: "different array arity {} {}", n, data.len())
+            }
+            _ => err_at!(FailKey, msg: "not an list"),
+        }
+    }
+}
+
 impl TryFrom<bool> for Cbor {
     type Error = Error;
 
@@ -570,6 +599,18 @@ impl TryFrom<bool> for Cbor {
         match val {
             true => SimpleValue::True.try_into(),
             false => SimpleValue::False.try_into(),
+        }
+    }
+}
+
+impl TryFrom<Cbor> for bool {
+    type Error = Error;
+
+    fn try_from(val: Cbor) -> Result<bool> {
+        match val {
+            Cbor::Major7(_, SimpleValue::True) => Ok(true),
+            Cbor::Major7(_, SimpleValue::False) => Ok(false),
+            _ => err_at!(FailConvert, msg: "not a bool"),
         }
     }
 }
@@ -582,11 +623,33 @@ impl TryFrom<f32> for Cbor {
     }
 }
 
+impl TryFrom<Cbor> for f32 {
+    type Error = Error;
+
+    fn try_from(val: Cbor) -> Result<f32> {
+        match val {
+            Cbor::Major7(_, SimpleValue::F32(val)) => Ok(val),
+            _ => err_at!(FailConvert, msg: "not f32"),
+        }
+    }
+}
+
 impl TryFrom<f64> for Cbor {
     type Error = Error;
 
     fn try_from(val: f64) -> Result<Cbor> {
         SimpleValue::F64(val).try_into()
+    }
+}
+
+impl TryFrom<Cbor> for f64 {
+    type Error = Error;
+
+    fn try_from(val: Cbor) -> Result<f64> {
+        match val {
+            Cbor::Major7(_, SimpleValue::F64(val)) => Ok(val),
+            _ => err_at!(FailConvert, msg: "not f64"),
+        }
     }
 }
 
@@ -604,9 +667,33 @@ impl TryFrom<i64> for Cbor {
     }
 }
 
+impl TryFrom<Cbor> for i64 {
+    type Error = Error;
+
+    fn try_from(val: Cbor) -> Result<i64> {
+        let val = match val {
+            Cbor::Major0(_, val) => err_at!(FailConvert, i64::try_from(val))?,
+            Cbor::Major1(_, val) => -err_at!(FailConvert, i64::try_from(val + 1))?,
+            _ => err_at!(FailConvert, msg: "not a number")?,
+        };
+        Ok(val)
+    }
+}
+
 impl From<u64> for Cbor {
     fn from(val: u64) -> Cbor {
         Cbor::Major0(val.into(), val)
+    }
+}
+
+impl TryFrom<Cbor> for u64 {
+    type Error = Error;
+
+    fn try_from(val: Cbor) -> Result<u64> {
+        match val {
+            Cbor::Major0(_, val) => Ok(val),
+            _ => err_at!(FailConvert, msg: "not a number"),
+        }
     }
 }
 
@@ -619,6 +706,17 @@ impl TryFrom<usize> for Cbor {
     }
 }
 
+impl TryFrom<Cbor> for usize {
+    type Error = Error;
+
+    fn try_from(val: Cbor) -> Result<usize> {
+        match val {
+            Cbor::Major0(_, val) => err_at!(FailConvert, usize::try_from(val)),
+            _ => err_at!(FailConvert, msg: "not a number"),
+        }
+    }
+}
+
 impl TryFrom<isize> for Cbor {
     type Error = Error;
 
@@ -627,12 +725,36 @@ impl TryFrom<isize> for Cbor {
     }
 }
 
-impl TryFrom<Vec<u8>> for Cbor {
+impl TryFrom<Cbor> for isize {
     type Error = Error;
 
-    fn try_from(val: Vec<u8>) -> Result<Cbor> {
+    fn try_from(val: Cbor) -> Result<isize> {
+        let val = match val {
+            Cbor::Major0(_, val) => err_at!(FailConvert, isize::try_from(val))?,
+            Cbor::Major1(_, val) => -err_at!(FailConvert, isize::try_from(val + 1))?,
+            _ => err_at!(FailConvert, msg: "not a number")?,
+        };
+        Ok(val)
+    }
+}
+
+impl<'a> TryFrom<&'a [u8]> for Cbor {
+    type Error = Error;
+
+    fn try_from(val: &'a [u8]) -> Result<Cbor> {
         let n = err_at!(FailConvert, u64::try_from(val.len()))?;
-        Ok(Cbor::Major2(n.into(), val))
+        Ok(Cbor::Major2(n.into(), val.to_vec()))
+    }
+}
+
+impl TryFrom<Cbor> for Vec<u8> {
+    type Error = Error;
+
+    fn try_from(val: Cbor) -> Result<Vec<u8>> {
+        match val {
+            Cbor::Major2(_, val) => Ok(val),
+            _ => err_at!(FailConvert, msg: "not bytes"),
+        }
     }
 }
 
@@ -645,12 +767,46 @@ impl<'a> TryFrom<&'a str> for Cbor {
     }
 }
 
-impl TryFrom<Vec<Cbor>> for Cbor {
+impl TryFrom<Cbor> for String {
     type Error = Error;
 
-    fn try_from(val: Vec<Cbor>) -> Result<Cbor> {
+    fn try_from(val: Cbor) -> Result<String> {
+        use std::str::from_utf8;
+
+        match val {
+            Cbor::Major3(_, val) => Ok(err_at!(FailConvert, from_utf8(&val))?.to_string()),
+            _ => err_at!(FailConvert, msg: "not utf8-string"),
+        }
+    }
+}
+
+impl<T: TryInto<Cbor, Error = Error>> TryFrom<Vec<T>> for Cbor {
+    type Error = Error;
+
+    fn try_from(val: Vec<T>) -> Result<Cbor> {
         let n = err_at!(FailConvert, u64::try_from(val.len()))?;
-        Ok(Cbor::Major4(n.into(), val))
+        let mut arr = vec![];
+        for item in val.into_iter() {
+            arr.push(item.try_into()?)
+        }
+        Ok(Cbor::Major4(n.into(), arr))
+    }
+}
+
+impl<T: TryFrom<Cbor, Error = Error>> TryFrom<Cbor> for Vec<T> {
+    type Error = Error;
+
+    fn try_from(val: Cbor) -> Result<Vec<T>> {
+        match val {
+            Cbor::Major4(_, data) => {
+                let mut arr = vec![];
+                for item in data.into_iter() {
+                    arr.push(item.try_into()?)
+                }
+                Ok(arr)
+            }
+            _ => err_at!(FailConvert, msg: "not a vector"),
+        }
     }
 }
 
@@ -663,12 +819,23 @@ impl TryFrom<Vec<(Key, Cbor)>> for Cbor {
     }
 }
 
-impl<T: Into<Cbor>> TryFrom<Option<T>> for Cbor {
+impl TryFrom<Cbor> for Vec<(Key, Cbor)> {
+    type Error = Error;
+
+    fn try_from(val: Cbor) -> Result<Vec<(Key, Cbor)>> {
+        match val {
+            Cbor::Major5(_, data) => Ok(data),
+            _ => err_at!(FailConvert, msg: "not a map"),
+        }
+    }
+}
+
+impl<T: TryInto<Cbor, Error = Error>> TryFrom<Option<T>> for Cbor {
     type Error = Error;
 
     fn try_from(val: Option<T>) -> Result<Cbor> {
         match val {
-            Some(val) => Ok(val.into()),
+            Some(val) => val.try_into(),
             None => SimpleValue::Null.try_into(),
         }
     }
