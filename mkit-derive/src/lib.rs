@@ -40,16 +40,16 @@ fn from_type_to_cbor(name: &Ident, fields: &FieldsNamed) -> TokenStream {
 
     quote! {
         impl #name {
-            pub fn to_cbor_msg_name(&self) -> String {
-                ::ip_tools::utils::to_snake_case(#name)
+            pub fn to_cbor_msg_name() -> String {
+                ::mkit::utils::to_snake_case(#name)
             }
         }
 
-        impl ::std::convert::TryFrom<#name> for ::ip_tools::cbor::Cbor {
-            type Error = ::ip_tools::cbor::Error;
+        impl ::std::convert::TryFrom<#name> for ::mkit::cbor::Cbor {
+            type Error = ::mkit::cbor::Error;
 
-            fn try_from(value: #name) -> ::ip_tools::cbor::Cbor {
-                let mut props: Vec<(::ip_tools::cbor::Key, ::ip_tools::cbor::Cbor)> = vec![];
+            fn try_from(value: #name) -> ::mkit::cbor::Cbor {
+                let mut props: Vec<(::mkit::cbor::Key, ::mkit::cbor::Cbor)> = vec![];
                 #token_builder;
                 Ok(props.try_into()?)
             }
@@ -59,31 +59,47 @@ fn from_type_to_cbor(name: &Ident, fields: &FieldsNamed) -> TokenStream {
 
 fn to_cbor_property(field: &Field) -> TokenStream {
     match &field.ident {
-        Some(field_name) => {
+        Some(field_name) => quote! {
             let key = cbor::Key::Text(field_name.to_string().to_lowercase());
-            let val: ::ip_tools::cbor::Cbor = value.#field_name.try_into()?;
+            let val: ::mkit::cbor::Cbor = value.#field_name.try_into()?;
             props.push((key, val))
-        }
+        },
         None => TokenStream::new(),
     }
 }
 
 fn from_cbor_to_type(name: &Ident, fields: &FieldsNamed) -> TokenStream {
     let mut token_builder = quote! {
-        let key = cbor::Key::Text("__msg_name".to_string());
-        let val: Cbor = #name.to_lower_case().try_into()?;
-        props.push((key, val));
+        let mut props: Vec<(::mkit::cbor::Key, ::mkit::cbor::Cbor)> = value.try_into()?;
+        match props.remove(0) {
+            (::mkit::cbor::Key::Text(key), name) => {
+                let name: String = name.try_into()?;
+                if key != "__msg_name" || name != #name.to_cbor_msg_name() {
+                    err_at!(FailConvert, msg: "wrong msg {} {}", key, #name.to_cbor_msg_name())?;
+                }
+            }
+            _ => {
+                err_at!(FailConvert, msg: "not a msg {}", #name.to_cbor_msg_name())?;
+            }
+        }
+
+        let mut props: Vec<(::mkit::cbor::Key, ::mkit::cbor::Cbor)> = props.map(|(key, val)| {
+            let key: String = key.try_into()?;
+            (key, val)
+        }).collect();
+
+        props.sort_by(|(key1, _), (key2, _)| key1.cmp(key2));
     };
-    let mut token_builder = quote! {};
+
     for field in fields.named.iter() {
         token_builder.extend(to_type_field(field));
     }
 
     quote! {
-        impl ::std::convert::TryFrom<::jsondata::Json> for #name {
-            type Error = ::jsondata::Error;
+        impl ::std::convert::TryFrom<::mkit::cbor::Cbor> for #name {
+            type Error = ::mkit::Error;
 
-            fn try_from(value: ::jsondata::Json) -> ::std::result::Result<#name, Self::Error> {
+            fn try_from(value: ::mkit::cbor::Cbor) -> ::std::result::Result<#name, Self::Error> {
                 use ::std::convert::TryInto;
 
                 Ok(#name {
@@ -95,46 +111,18 @@ fn from_cbor_to_type(name: &Ident, fields: &FieldsNamed) -> TokenStream {
 }
 
 fn to_type_field(field: &Field) -> TokenStream {
-    match &field.ident {
-        Some(field_name) => {
-            let key = field_name.to_string().to_lowercase();
-            let is_from_str = get_from_str(&field.attrs);
-            match (is_from_str, get_try_into(&field.attrs)) {
-                (true, _) => quote! {
-                    #field_name: {
-                        let v: String = match value.get(&("/".to_string() + #key))?.try_into() {
-                            Ok(v) => Ok(v),
-                            Err(err) => Err(::jsondata::Error::InvalidType(#key.to_string())),
-                        }?;
-                        match v.parse() {
-                            Ok(v) => Ok(v),
-                            Err(err) => Err(::jsondata::Error::InvalidType(#key.to_string())),
-                        }?
-                    },
-                },
-                (false, Some(intr_type)) => quote! {
-                    #field_name: {
-                        let v: #intr_type = match value.get(&("/".to_string() + #key))?.try_into() {
-                            Ok(v) => Ok(v),
-                            Err(err) => Err(::jsondata::Error::InvalidType(#key.to_string())),
-                        }?;
-                        match v.try_into() {
-                            Ok(v) => Ok(v),
-                            Err(err) => Err(::jsondata::Error::InvalidType(#key.to_string())),
-                        }?
-                    },
-                },
-                (false, None) => quote! {
-                    #field_name: match value.get(&("/".to_string() + #key))?.try_into() {
-                        Ok(v) => Ok(v),
-                        Err(err) => {
-                            let msg = format!("{} err: {}", #key.to_string(), err);
-                            Err(::jsondata::Error::InvalidType(msg))
-                        }
-                    }?,
-                },
+    let field_name = match &field.ident {
+        Some(field_name) => field_name,
+        None => return TokenStream::new(),
+    };
+
+    quote! {
+        #field_name: match props.binary_search_by(|(key, _)| key.cmp(#field_name)) {
+            Ok(index) => {
+                let (_, value) = props.remove(index);
+                value.try_into()?,
             }
-        }
-        None => TokenStream::new(),
+            err => err_at!(FailConvert, "field not found {}", #field_name),
+        },
     }
 }
