@@ -1,11 +1,11 @@
 [package]
-name = "ip-derive"
+name = "mkit-derive"
 version = "0.1.0"
 edition = "2018"
 authors = ["prataprc <prataprc@gmail.com>"]
 description = "Macros for inter-planetary applications"
-documentation = "https://docs.rs/ip-tools"
-repository = "https://github.com/bnclabs/ip-tools"
+documentation = "https://docs.rs/mkit"
+repository = "https://github.com/bnclabs/mkit"
 keywords = ["data", "macro", "cbor"]
 categories = ["data"]
 license = "MIT"

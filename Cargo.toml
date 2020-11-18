@@ -1,14 +1,14 @@
 [package]
-name = "ip-tools"
+name = "mkit"
 version = "0.1.0"
 description = "Tools and macros for inter-planetary applications"
-repository = "https://github.com/bnclabs/ip-tools"
+repository = "https://github.com/bnclabs/mkit"
 authors = ["prataprc <prataprc@gmail.com>"]
 keywords = ["data", "cbor"]
 license = "MIT"
 readme = "README.md"
-documentation = "https://docs.rs/ip-tools/"
+documentation = "https://docs.rs/mkit/"
 edition = "2018"
 
 [dependencies]
-# ip-derive = { path = "ip-derive", version = "=0.1.0"}
+# mkit-derive = { path = "mkit-derive", version = "=0.1.0"}
