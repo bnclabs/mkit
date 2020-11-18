@@ -22,6 +22,7 @@ pub enum Cbor {
     Major5(Info, Vec<(Key, Cbor)>), // dict 0-23,24,25,26,27,31
     Major6(Info, Tag),              // tags similar to major0
     Major7(Info, SimpleValue),      // type refer SimpleValue
+    Binary(Vec<u8>),                // for lazy decoding cbor data
 }
 
 impl Cbor {
@@ -36,26 +37,26 @@ impl Cbor {
         }
 
         let major = self.to_major_val();
-        match self {
+        let n = match self {
             Cbor::Major0(info, num) => {
                 let n = encode_hdr(major, *info, buf)?;
-                Ok(n + encode_addnl(*num, buf)?)
+                n + encode_addnl(*num, buf)?
             }
             Cbor::Major1(info, num) => {
                 let n = encode_hdr(major, *info, buf)?;
-                Ok(n + encode_addnl(*num, buf)?)
+                n + encode_addnl(*num, buf)?
             }
             Cbor::Major2(info, byts) => {
                 let n = encode_hdr(major, *info, buf)?;
                 let m = encode_addnl(err_at!(FailConvert, u64::try_from(byts.len()))?, buf)?;
                 buf.copy_from_slice(&byts);
-                Ok(n + m + byts.len())
+                n + m + byts.len()
             }
             Cbor::Major3(info, text) => {
                 let n = encode_hdr(major, *info, buf)?;
                 let m = encode_addnl(err_at!(FailCbor, u64::try_from(text.len()))?, buf)?;
                 buf.copy_from_slice(&text);
-                Ok(n + m + text.len())
+                n + m + text.len()
             }
             Cbor::Major4(info, list) => {
                 let n = encode_hdr(major, *info, buf)?;
@@ -64,7 +65,7 @@ impl Cbor {
                 for x in list.iter() {
                     acc += x.do_encode(buf, depth + 1)?;
                 }
-                Ok(n + m + acc)
+                n + m + acc
             }
             Cbor::Major5(info, map) => {
                 let n = encode_hdr(major, *info, buf)?;
@@ -75,24 +76,30 @@ impl Cbor {
                     acc += key.do_encode(buf, depth + 1)?;
                     acc += val.do_encode(buf, depth + 1)?;
                 }
-                Ok(n + m + acc)
+                n + m + acc
             }
             Cbor::Major6(info, tagg) => {
                 let n = encode_hdr(major, *info, buf)?;
                 let m = tagg.encode(buf)?;
-                Ok(n + m)
+                n + m
             }
             Cbor::Major7(info, sval) => {
                 let n = encode_hdr(major, *info, buf)?;
                 let m = sval.encode(buf)?;
-                Ok(n + m)
+                n + m
             }
-        }
+            Cbor::Binary(data) => {
+                buf.extend_from_slice(data);
+                data.len()
+            }
+        };
+
+        Ok(n)
     }
 
     /// Deserialize a bytes from reader `r` to Cbor value.
     pub fn decode<R: io::Read>(r: &mut R) -> Result<Cbor> {
-        Self::do_decode(r, 1)
+        Cbor::do_decode(r, 1)
     }
 
     fn do_decode<R: io::Read>(r: &mut R, depth: u32) -> Result<Cbor> {
@@ -108,7 +115,7 @@ impl Cbor {
             (2, Info::Indefinite) => {
                 let mut data: Vec<u8> = Vec::default();
                 loop {
-                    match Self::do_decode(r, depth + 1)? {
+                    match Cbor::do_decode(r, depth + 1)? {
                         Cbor::Major2(_, chunk) => data.extend_from_slice(&chunk),
                         Cbor::Major7(_, SimpleValue::Break) => break,
                         _ => err_at!(FailConvert, msg: "expected byte chunk")?,
@@ -125,7 +132,7 @@ impl Cbor {
             (3, Info::Indefinite) => {
                 let mut text: Vec<u8> = Vec::default();
                 loop {
-                    match Self::do_decode(r, depth + 1)? {
+                    match Cbor::do_decode(r, depth + 1)? {
                         Cbor::Major3(_, chunk) => text.extend_from_slice(&chunk),
                         Cbor::Major7(_, SimpleValue::Break) => break,
                         _ => err_at!(FailConvert, msg: "expected byte chunk")?,
@@ -142,7 +149,7 @@ impl Cbor {
             (4, Info::Indefinite) => {
                 let mut list: Vec<Cbor> = vec![];
                 loop {
-                    match Self::do_decode(r, depth + 1)? {
+                    match Cbor::do_decode(r, depth + 1)? {
                         Cbor::Major7(_, SimpleValue::Break) => break,
                         item => list.push(item),
                     }
@@ -153,15 +160,15 @@ impl Cbor {
                 let mut list: Vec<Cbor> = vec![];
                 let n = decode_addnl(info, r)?;
                 for _ in 0..n {
-                    list.push(Self::do_decode(r, depth + 1)?);
+                    list.push(Cbor::do_decode(r, depth + 1)?);
                 }
                 Cbor::Major4(info, list)
             }
             (5, Info::Indefinite) => {
                 let mut map: Vec<(Key, Cbor)> = Vec::default();
                 loop {
-                    let key = Self::do_decode(r, depth + 1)?.try_into()?;
-                    let val = match Self::do_decode(r, depth + 1)? {
+                    let key = Cbor::do_decode(r, depth + 1)?.try_into()?;
+                    let val = match Cbor::do_decode(r, depth + 1)? {
                         Cbor::Major7(_, SimpleValue::Break) => break,
                         val => val,
                     };
@@ -173,8 +180,8 @@ impl Cbor {
                 let mut map: Vec<(Key, Cbor)> = Vec::default();
                 let n = decode_addnl(info, r)?;
                 for _ in 0..n {
-                    let key = Self::do_decode(r, depth + 1)?.try_into()?;
-                    let val = Self::do_decode(r, depth + 1)?;
+                    let key = Cbor::do_decode(r, depth + 1)?.try_into()?;
+                    let val = Cbor::do_decode(r, depth + 1)?;
                     map.push((key, val));
                 }
                 Cbor::Major5(info, map)
@@ -196,6 +203,7 @@ impl Cbor {
             Cbor::Major5(_, _) => 5,
             Cbor::Major6(_, _) => 6,
             Cbor::Major7(_, _) => 7,
+            Cbor::Binary(data) => (data[0] & 0xe0) >> 5,
         }
     }
 }
@@ -540,5 +548,128 @@ impl TryFrom<Cbor> for Key {
         };
 
         Ok(key)
+    }
+}
+
+impl<T: Clone + Into<Cbor>, const N: usize> TryFrom<[T; N]> for Cbor {
+    type Error = Error;
+
+    fn try_from(arr: [T; N]) -> Result<Cbor> {
+        let info = err_at!(FailConvert, u64::try_from(arr.len()))?.into();
+        Ok(Cbor::Major4(
+            info,
+            arr.iter().map(|x| x.clone().into()).collect(),
+        ))
+    }
+}
+
+impl TryFrom<bool> for Cbor {
+    type Error = Error;
+
+    fn try_from(val: bool) -> Result<Cbor> {
+        match val {
+            true => SimpleValue::True.try_into(),
+            false => SimpleValue::False.try_into(),
+        }
+    }
+}
+
+impl TryFrom<f32> for Cbor {
+    type Error = Error;
+
+    fn try_from(val: f32) -> Result<Cbor> {
+        SimpleValue::F32(val).try_into()
+    }
+}
+
+impl TryFrom<f64> for Cbor {
+    type Error = Error;
+
+    fn try_from(val: f64) -> Result<Cbor> {
+        SimpleValue::F64(val).try_into()
+    }
+}
+
+impl TryFrom<i64> for Cbor {
+    type Error = Error;
+
+    fn try_from(val: i64) -> Result<Cbor> {
+        if val >= 0 {
+            Ok(err_at!(FailConvert, u64::try_from(val))?.into())
+        } else {
+            let val = err_at!(FailConvert, u64::try_from(val.abs() - 1))?;
+            let info = val.into();
+            Ok(Cbor::Major1(info, val))
+        }
+    }
+}
+
+impl From<u64> for Cbor {
+    fn from(val: u64) -> Cbor {
+        Cbor::Major0(val.into(), val)
+    }
+}
+
+impl TryFrom<usize> for Cbor {
+    type Error = Error;
+
+    fn try_from(val: usize) -> Result<Cbor> {
+        let val = err_at!(FailConvert, u64::try_from(val))?;
+        Ok(val.into())
+    }
+}
+
+impl TryFrom<isize> for Cbor {
+    type Error = Error;
+
+    fn try_from(val: isize) -> Result<Cbor> {
+        err_at!(FailConvert, i64::try_from(val))?.try_into()
+    }
+}
+
+impl TryFrom<Vec<u8>> for Cbor {
+    type Error = Error;
+
+    fn try_from(val: Vec<u8>) -> Result<Cbor> {
+        let n = err_at!(FailConvert, u64::try_from(val.len()))?;
+        Ok(Cbor::Major2(n.into(), val))
+    }
+}
+
+impl<'a> TryFrom<&'a str> for Cbor {
+    type Error = Error;
+
+    fn try_from(val: &'a str) -> Result<Cbor> {
+        let n = err_at!(FailConvert, u64::try_from(val.len()))?;
+        Ok(Cbor::Major3(n.into(), val.as_bytes().to_vec()))
+    }
+}
+
+impl TryFrom<Vec<Cbor>> for Cbor {
+    type Error = Error;
+
+    fn try_from(val: Vec<Cbor>) -> Result<Cbor> {
+        let n = err_at!(FailConvert, u64::try_from(val.len()))?;
+        Ok(Cbor::Major4(n.into(), val))
+    }
+}
+
+impl TryFrom<Vec<(Key, Cbor)>> for Cbor {
+    type Error = Error;
+
+    fn try_from(val: Vec<(Key, Cbor)>) -> Result<Cbor> {
+        let n = err_at!(FailConvert, u64::try_from(val.len()))?;
+        Ok(Cbor::Major5(n.into(), val))
+    }
+}
+
+impl<T: Into<Cbor>> TryFrom<Option<T>> for Cbor {
+    type Error = Error;
+
+    fn try_from(val: Option<T>) -> Result<Cbor> {
+        match val {
+            Some(val) => Ok(val.into()),
+            None => SimpleValue::Null.try_into(),
+        }
     }
 }

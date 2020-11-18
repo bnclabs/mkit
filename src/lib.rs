@@ -1,7 +1,7 @@
 //! Package implement collection of tools and traits for building
 //! inter-planetary applications.
 
-#![feature(total_cmp)]
+#![feature(min_const_generics)]
 
 use std::{error, fmt, result};
 
