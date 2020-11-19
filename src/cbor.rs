@@ -1,6 +1,7 @@
 //! Simple and easy CBOR serialization.
 
 use std::{
+    cmp,
     convert::{TryFrom, TryInto},
     io,
 };
@@ -208,7 +209,7 @@ impl Cbor {
     }
 
     /// Convert cbor into optional value of type T.
-    pub fn to_optional<T: TryFrom<Cbor, Error = Error>>(self) -> Result<Option<T>> {
+    pub fn into_optional<T: TryFrom<Cbor, Error = Error>>(self) -> Result<Option<T>> {
         match self {
             Cbor::Major7(_, SimpleValue::Null) => Ok(None),
             val => Ok(Some(val.try_into()?)),
@@ -502,13 +503,76 @@ impl Tag {
 /// Possible types that can be used as key in cbor-map.
 #[derive(Clone)]
 pub enum Key {
+    Bool(bool),
     U64(u64),
     N64(i64),
-    Bytes(Vec<u8>),
-    Text(String),
-    Bool(bool),
     F32(f32),
     F64(f64),
+    Bytes(Vec<u8>),
+    Text(String),
+}
+
+impl Key {
+    fn to_type_order(&self) -> usize {
+        use Key::*;
+
+        match self {
+            Bool(_) => 4,
+            U64(_) => 8,
+            N64(_) => 12,
+            F32(_) => 16,
+            F64(_) => 20,
+            Bytes(_) => 24,
+            Text(_) => 28,
+        }
+    }
+}
+
+impl Eq for Key {}
+
+impl PartialEq for Key {
+    fn eq(&self, other: &Self) -> bool {
+        use Key::*;
+
+        match (self, other) {
+            (U64(a), U64(b)) => a == b,
+            (N64(a), N64(b)) => a == b,
+            (Bytes(a), Bytes(b)) => a == b,
+            (Text(a), Text(b)) => a == b,
+            (Bool(a), Bool(b)) => a == b,
+            (F32(a), F32(b)) => a == b,
+            (F64(a), F64(b)) => a == b,
+            (_, _) => false,
+        }
+    }
+}
+
+impl Ord for Key {
+    fn cmp(&self, other: &Key) -> cmp::Ordering {
+        use Key::*;
+
+        let (a, b) = (self.to_type_order(), other.to_type_order());
+        if a == b {
+            match (self, other) {
+                (U64(a), U64(b)) => a.cmp(b),
+                (N64(a), N64(b)) => a.cmp(b),
+                (Bytes(a), Bytes(b)) => a.cmp(b),
+                (Text(a), Text(b)) => a.cmp(b),
+                (Bool(a), Bool(b)) => a.cmp(b),
+                (F32(a), F32(b)) => a.total_cmp(b),
+                (F64(a), F64(b)) => a.total_cmp(b),
+                (_, _) => unreachable!(),
+            }
+        } else {
+            a.cmp(&b)
+        }
+    }
+}
+
+impl PartialOrd for Key {
+    fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
+        Some(self.cmp(other))
+    }
 }
 
 impl TryFrom<Key> for Cbor {
@@ -658,7 +722,7 @@ impl TryFrom<i64> for Cbor {
 
     fn try_from(val: i64) -> Result<Cbor> {
         if val >= 0 {
-            Ok(err_at!(FailConvert, u64::try_from(val))?.into())
+            Ok(err_at!(FailConvert, u64::try_from(val))?.try_into()?)
         } else {
             let val = err_at!(FailConvert, u64::try_from(val.abs() - 1))?;
             let info = val.into();
@@ -680,9 +744,11 @@ impl TryFrom<Cbor> for i64 {
     }
 }
 
-impl From<u64> for Cbor {
-    fn from(val: u64) -> Cbor {
-        Cbor::Major0(val.into(), val)
+impl TryFrom<u64> for Cbor {
+    type Error = Error;
+
+    fn try_from(val: u64) -> Result<Cbor> {
+        Ok(Cbor::Major0(val.into(), val))
     }
 }
 
@@ -702,7 +768,7 @@ impl TryFrom<usize> for Cbor {
 
     fn try_from(val: usize) -> Result<Cbor> {
         let val = err_at!(FailConvert, u64::try_from(val))?;
-        Ok(val.into())
+        Ok(val.try_into()?)
     }
 }
 
@@ -805,6 +871,26 @@ impl<T: TryFrom<Cbor, Error = Error>> TryFrom<Cbor> for Vec<T> {
                 }
                 Ok(arr)
             }
+            _ => err_at!(FailConvert, msg: "not a vector"),
+        }
+    }
+}
+
+impl TryFrom<Vec<Cbor>> for Cbor {
+    type Error = Error;
+
+    fn try_from(val: Vec<Cbor>) -> Result<Cbor> {
+        let n = err_at!(FailConvert, u64::try_from(val.len()))?;
+        Ok(Cbor::Major4(n.into(), val))
+    }
+}
+
+impl TryFrom<Cbor> for Vec<Cbor> {
+    type Error = Error;
+
+    fn try_from(val: Cbor) -> Result<Vec<Cbor>> {
+        match val {
+            Cbor::Major4(_, data) => Ok(data),
             _ => err_at!(FailConvert, msg: "not a vector"),
         }
     }

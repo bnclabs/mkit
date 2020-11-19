@@ -2,6 +2,7 @@
 //! inter-planetary applications.
 
 #![feature(min_const_generics)]
+#![feature(total_cmp)]
 
 use std::{error, fmt, result};
 
@@ -54,6 +55,9 @@ macro_rules! err_at {
 pub mod cbor;
 pub mod traits;
 pub mod util;
+
+#[doc(hidden)]
+pub use mkit_derive::*;
 
 /// Error variants that can be returned by this package's API.
 ///
