@@ -40,7 +40,10 @@ fn impl_cborize_struct(input: &DeriveInput) -> TokenStream {
 
 fn from_struct_to_cbor(name: &Ident, generics: &Generics, fields: &Fields) -> TokenStream {
     let preamble = quote! {
-        let val = ::mkit::cbor::Cbor::try_from(#name::#generics::to_cbor_msg_name())?;
+        let val: ::mkit::cbor::Cbor = {
+            let id = ::mkit::cbor::Cbor::try_from(#name#generics::ID)?;
+            ::mkit::cbor::Tag::from_identifier(id).into()
+        };
         items.push(val);
     };
 
@@ -95,10 +98,13 @@ fn from_cbor_to_struct(name: &Ident, generics: &Generics, fields: &Fields) -> To
         if items.len() == 0 {
             err_at!(FailConvert, msg: "empty msg for {}", #name_lit)?;
         }
-        let msg_name = String::try_from(items.remove(0))?;
-        let typ_name = #name::#generics::to_cbor_msg_name();
-        if msg_name != typ_name {
-            err_at!(FailConvert, msg: "bad msg name {} {}", msg_name, typ_name)?;
+        let data_id = items.remove(0);
+        let type_id: ::mkit::cbor::Cbor = {
+            let id = ::mkit::cbor::Cbor::try_from(#name#generics::ID)?;
+            ::mkit::cbor::Tag::from_identifier(id).into()
+        };
+        if data_id != type_id {
+            err_at!(FailConvert, msg: "bad id for {}", #name_lit)?;
         }
         if #n_fields != items.len() {
             err_at!(FailConvert, msg: "bad arity {} {}", #n_fields, items.len())?;
@@ -163,7 +169,10 @@ fn impl_cborize_enum(input: &DeriveInput) -> TokenStream {
 
 fn from_enum_to_cbor(name: &Ident, generics: &Generics, variants: &[&Variant]) -> TokenStream {
     let preamble = quote! {
-        let val = ::mkit::cbor::Cbor::try_from(#name::#generics::to_cbor_msg_name())?;
+        let val: ::mkit::cbor::Cbor = {
+            let id = ::mkit::cbor::Cbor::try_from(#name#generics::ID)?;
+            ::mkit::cbor::Tag::from_identifier(id).into()
+        };
         items.push(val);
     };
 
@@ -236,10 +245,13 @@ fn from_cbor_to_enum(name: &Ident, generics: &Generics, variants: &[&Variant]) -
         if items.len() < 2 {
             err_at!(FailConvert, msg: "empty msg for {}", #name_lit)?;
         }
-        let msg_name = String::try_from(items.remove(0))?;
-        let typ_name = #name::#generics::to_cbor_msg_name();
-        if msg_name != typ_name {
-            err_at!(FailConvert, msg: "bad msg name {} {}", msg_name, typ_name)?;
+        let data_id = items.remove(0);
+        let type_id: ::mkit::cbor::Cbor= {
+            let id = ::mkit::cbor::Cbor::try_from(#name#generics::ID)?;
+            ::mkit::cbor::Tag::from_identifier(id).into()
+        }
+        if data_id != type_id {
+            err_at!(FailConvert, msg: "bad {}", #name_lit)?
         }
 
         let variant_name = String::try_from(items.remove(0))?;
@@ -370,9 +382,8 @@ fn cbor_to_named_fields(fields: &FieldsNamed) -> TokenStream {
     let mut tokens = TokenStream::new();
     for field in fields.named.iter() {
         let field_name = field.ident.as_ref().unwrap();
-        let ty = &field.ty;
         tokens.extend(quote! {
-            #field_name: #ty::try_from(items.remove(0))?,
+            #field_name: items.remove(0).try_into()?,
         });
     }
     tokens

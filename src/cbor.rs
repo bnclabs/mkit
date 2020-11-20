@@ -13,7 +13,7 @@ const RECURSION_LIMIT: u32 = 1000;
 
 /// Cbor type parametrised over list type and map type. Use one of the
 /// conversion trait to convert language-native-type to a Cbor variant.
-#[derive(Clone)]
+#[derive(Clone, Eq, PartialEq)]
 pub enum Cbor {
     Major0(Info, u64),              // uint 0-23,24,25,26,27
     Major1(Info, u64),              // nint 0-23,24,25,26,27
@@ -79,14 +79,14 @@ impl Cbor {
                 }
                 n + m + acc
             }
-            Cbor::Major6(info, tagg) => {
+            Cbor::Major6(info, tag) => {
                 let n = encode_hdr(major, *info, buf)?;
-                let m = tagg.encode(buf)?;
+                let m = Tag::encode(tag, buf)?;
                 n + m
             }
             Cbor::Major7(info, sval) => {
                 let n = encode_hdr(major, *info, buf)?;
-                let m = sval.encode(buf)?;
+                let m = SimpleValue::encode(sval, buf)?;
                 n + m
             }
             Cbor::Binary(data) => {
@@ -218,7 +218,7 @@ impl Cbor {
 }
 
 /// 5-bit value for additional info.
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Eq, PartialEq)]
 pub enum Info {
     /// additional info is part of this info.
     Tiny(u8), // 0..=23
@@ -385,6 +385,16 @@ pub enum SimpleValue {
     Break, // 31
 }
 
+impl Eq for SimpleValue {}
+
+impl PartialEq for SimpleValue {
+    fn eq(&self, other: &Self) -> bool {
+        let a = self.to_type_order();
+        let b = other.to_type_order();
+        a == b
+    }
+}
+
 impl TryFrom<SimpleValue> for Cbor {
     type Error = Error;
 
@@ -409,11 +419,28 @@ impl TryFrom<SimpleValue> for Cbor {
 }
 
 impl SimpleValue {
-    fn encode(&self, buf: &mut Vec<u8>) -> Result<usize> {
+    fn to_type_order(&self) -> usize {
+        use SimpleValue::*;
+
+        match self {
+            Unassigned => 4,
+            True => 8,
+            False => 12,
+            Null => 16,
+            Undefined => 20,
+            Reserved24(_) => 24,
+            F16(_) => 28,
+            F32(_) => 32,
+            F64(_) => 36,
+            Break => 40,
+        }
+    }
+
+    fn encode(sval: &SimpleValue, buf: &mut Vec<u8>) -> Result<usize> {
         use SimpleValue::*;
 
         let mut scratch = [0_u8; 8];
-        let n = match self {
+        let n = match sval {
             True | False | Null | Undefined | Break | Unassigned => 0,
             Reserved24(num) => {
                 scratch[0] = *num;
@@ -466,36 +493,54 @@ impl SimpleValue {
 }
 
 /// Major type 6, Tag values.
-#[derive(Clone)]
+#[derive(Clone, Eq, PartialEq)]
 pub enum Tag {
+    /// Tag 39, used as identifier marker for multiple cbor-type.
+    Identifier(Box<Cbor>),
     /// Don't worry about the type wrapped by the tag-value, just encode
     /// the tag and leave the subsequent encoding at caller's discretion.
     Value(u64),
 }
 
-impl From<Tag> for u64 {
-    fn from(tag: Tag) -> u64 {
-        match tag {
-            Tag::Value(val) => val,
-        }
-    }
-}
-
-impl From<u64> for Tag {
-    fn from(tag: u64) -> Tag {
-        Tag::Value(tag)
+impl From<Tag> for Cbor {
+    fn from(tag: Tag) -> Cbor {
+        let num = tag.to_tag_value();
+        Cbor::Major6(num.into(), tag)
     }
 }
 
 impl Tag {
-    fn encode(&self, buf: &mut Vec<u8>) -> Result<usize> {
+    pub fn from_value(value: u64) -> Tag {
+        Tag::Value(value)
+    }
+
+    pub fn from_identifier(value: Cbor) -> Tag {
+        Tag::Identifier(Box::new(value))
+    }
+
+    pub fn to_tag_value(&self) -> u64 {
         match self {
-            Tag::Value(val) => encode_addnl(*val, buf),
+            Tag::Identifier(_) => 39,
+            Tag::Value(val) => *val,
         }
     }
 
+    fn encode(tag: &Tag, buf: &mut Vec<u8>) -> Result<usize> {
+        let num = tag.to_tag_value();
+        let mut n = encode_addnl(num, buf)?;
+        n += match tag {
+            Tag::Identifier(val) => val.encode(buf)?,
+            Tag::Value(_) => 0,
+        };
+
+        Ok(n)
+    }
+
     fn decode<R: io::Read>(info: Info, r: &mut R) -> Result<Tag> {
-        let tag = Tag::Value(decode_addnl(info, r)?);
+        let tag = match decode_addnl(info, r)? {
+            39 => Tag::Identifier(Box::new(Cbor::decode(r)?)),
+            val => Tag::Value(val),
+        };
         Ok(tag)
     }
 }
@@ -532,18 +577,9 @@ impl Eq for Key {}
 
 impl PartialEq for Key {
     fn eq(&self, other: &Self) -> bool {
-        use Key::*;
-
-        match (self, other) {
-            (U64(a), U64(b)) => a == b,
-            (N64(a), N64(b)) => a == b,
-            (Bytes(a), Bytes(b)) => a == b,
-            (Text(a), Text(b)) => a == b,
-            (Bool(a), Bool(b)) => a == b,
-            (F32(a), F32(b)) => a == b,
-            (F64(a), F64(b)) => a == b,
-            (_, _) => false,
-        }
+        let a = self.to_type_order();
+        let b = other.to_type_order();
+        a == b
     }
 }
 
@@ -810,6 +846,15 @@ impl<'a> TryFrom<&'a [u8]> for Cbor {
     fn try_from(val: &'a [u8]) -> Result<Cbor> {
         let n = err_at!(FailConvert, u64::try_from(val.len()))?;
         Ok(Cbor::Major2(n.into(), val.to_vec()))
+    }
+}
+
+impl TryFrom<Vec<u8>> for Cbor {
+    type Error = Error;
+
+    fn try_from(val: Vec<u8>) -> Result<Cbor> {
+        let n = err_at!(FailConvert, u64::try_from(val.len()))?;
+        Ok(Cbor::Major2(n.into(), val))
     }
 }
 
