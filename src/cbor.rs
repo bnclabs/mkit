@@ -710,7 +710,7 @@ impl TryFrom<Cbor> for Key {
             Cbor::Major7(_, SimpleValue::False) => Key::Bool(false),
             Cbor::Major7(_, SimpleValue::F32(key)) => Key::F32(key),
             Cbor::Major7(_, SimpleValue::F64(key)) => Key::F64(key),
-            _ => err_at!(FailKey, msg: "cbor not a valid key")?,
+            _ => err_at!(FailCbor, msg: "cbor not a valid key")?,
         };
 
         Ok(key)
@@ -745,7 +745,7 @@ impl<T: Copy + Default + TryFrom<Cbor, Error = Error>, const N: usize> TryFrom<C
             Cbor::Major4(_, data) => {
                 err_at!(FailConvert, msg: "different array arity {} {}", n, data.len())
             }
-            _ => err_at!(FailKey, msg: "not an list"),
+            _ => err_at!(FailCbor, msg: "not an list"),
         }
     }
 }

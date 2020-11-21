@@ -66,7 +66,6 @@ pub use mkit_derive::*;
 pub enum Error {
     Fatal(String, String),
     FailConvert(String, String),
-    FailKey(String, String),
     IOError(String, String),
     FailCbor(String, String),
 }
@@ -78,7 +77,6 @@ impl fmt::Display for Error {
         match self {
             Fatal(p, msg) => write!(f, "{} Fatal: {}", p, msg),
             FailConvert(p, msg) => write!(f, "{} FailConvert: {}", p, msg),
-            FailKey(p, msg) => write!(f, "{} FailKey: {}", p, msg),
             IOError(p, msg) => write!(f, "{} IOError: {}", p, msg),
             FailCbor(p, msg) => write!(f, "{} FailCbor: {}", p, msg),
         }
