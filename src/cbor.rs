@@ -111,99 +111,129 @@ impl Cbor {
     }
 
     /// Deserialize a bytes from reader `r` to Cbor value.
-    pub fn decode<R: io::Read>(r: &mut R) -> Result<Cbor> {
+    pub fn decode<R: io::Read>(r: &mut R) -> Result<(Cbor, usize)> {
         Cbor::do_decode(r, 1)
     }
 
-    fn do_decode<R: io::Read>(r: &mut R, depth: u32) -> Result<Cbor> {
+    fn do_decode<R: io::Read>(r: &mut R, depth: u32) -> Result<(Cbor, usize)> {
         if depth > RECURSION_LIMIT {
             return err_at!(FailCbor, msg: "decode recursion limt exceeded");
         }
 
-        let (major, info) = decode_hdr(r)?;
+        let (major, info, n) = decode_hdr(r)?;
 
-        let val = match (major, info) {
-            (0, info) => Cbor::Major0(info, decode_addnl(info, r)?),
-            (1, info) => Cbor::Major1(info, decode_addnl(info, r)?),
+        let (val, m) = match (major, info) {
+            (0, info) => {
+                let (val, m) = decode_addnl(info, r)?;
+                (Cbor::Major0(info, val), m)
+            }
+            (1, info) => {
+                let (val, m) = decode_addnl(info, r)?;
+                (Cbor::Major1(info, val), m)
+            }
             (2, Info::Indefinite) => {
                 let mut data: Vec<u8> = Vec::default();
+                let mut m = 0_usize;
                 loop {
-                    match Cbor::do_decode(r, depth + 1)? {
+                    let (val, k) = Cbor::do_decode(r, depth + 1)?;
+                    match val {
                         Cbor::Major2(_, chunk) => data.extend_from_slice(&chunk),
                         Cbor::Major7(_, SimpleValue::Break) => break,
                         _ => err_at!(FailConvert, msg: "expected byte chunk")?,
                     }
+                    m += k;
                 }
-                Cbor::Major2(info, data)
+                (Cbor::Major2(info, data), m)
             }
             (2, info) => {
-                let n: usize = err_at!(FailConvert, decode_addnl(info, r)?.try_into())?;
-                let mut data = vec![0; n];
+                let (val, m) = decode_addnl(info, r)?;
+                let len: usize = err_at!(FailConvert, val.try_into())?;
+                let mut data = vec![0; len];
                 read!(r, &mut data);
-                Cbor::Major2(info, data)
+                (Cbor::Major2(info, data), m + len)
             }
             (3, Info::Indefinite) => {
                 let mut text: Vec<u8> = Vec::default();
+                let mut m = 0_usize;
                 loop {
-                    match Cbor::do_decode(r, depth + 1)? {
+                    let (val, k) = Cbor::do_decode(r, depth + 1)?;
+                    match val {
                         Cbor::Major3(_, chunk) => text.extend_from_slice(&chunk),
                         Cbor::Major7(_, SimpleValue::Break) => break,
                         _ => err_at!(FailConvert, msg: "expected byte chunk")?,
                     }
+                    m += k;
                 }
-                Cbor::Major3(info, text)
+                (Cbor::Major3(info, text), m)
             }
             (3, info) => {
-                let n: usize = err_at!(FailConvert, decode_addnl(info, r)?.try_into())?;
-                let mut text = vec![0; n];
+                let (val, m) = decode_addnl(info, r)?;
+                let len: usize = err_at!(FailConvert, val.try_into())?;
+                let mut text = vec![0; len];
                 read!(r, &mut text);
-                Cbor::Major3(info, text)
+                (Cbor::Major3(info, text), m + len)
             }
             (4, Info::Indefinite) => {
                 let mut list: Vec<Cbor> = vec![];
+                let mut m = 0_usize;
                 loop {
-                    match Cbor::do_decode(r, depth + 1)? {
+                    let (val, k) = Cbor::do_decode(r, depth + 1)?;
+                    match val {
                         Cbor::Major7(_, SimpleValue::Break) => break,
                         item => list.push(item),
                     }
+                    m += k;
                 }
-                Cbor::Major4(info, list)
+                (Cbor::Major4(info, list), m)
             }
             (4, info) => {
                 let mut list: Vec<Cbor> = vec![];
-                let n = decode_addnl(info, r)?;
-                for _ in 0..n {
-                    list.push(Cbor::do_decode(r, depth + 1)?);
+                let (len, mut m) = decode_addnl(info, r)?;
+                for _ in 0..len {
+                    let (val, k) = Cbor::do_decode(r, depth + 1)?;
+                    list.push(val);
+                    m += k;
                 }
-                Cbor::Major4(info, list)
+                (Cbor::Major4(info, list), m)
             }
             (5, Info::Indefinite) => {
                 let mut map: Vec<(Key, Cbor)> = Vec::default();
+                let mut m = 0_usize;
                 loop {
-                    let key = Cbor::do_decode(r, depth + 1)?.try_into()?;
-                    let val = match Cbor::do_decode(r, depth + 1)? {
+                    let (key, j) = Cbor::do_decode(r, depth + 1)?;
+                    let (val, k) = Cbor::do_decode(r, depth + 1)?;
+                    let val = match val {
                         Cbor::Major7(_, SimpleValue::Break) => break,
                         val => val,
                     };
-                    map.push((key, val));
+                    map.push((key.try_into()?, val));
+                    m += j + k;
                 }
-                Cbor::Major5(info, map)
+                (Cbor::Major5(info, map), m)
             }
             (5, info) => {
                 let mut map: Vec<(Key, Cbor)> = Vec::default();
-                let n = decode_addnl(info, r)?;
-                for _ in 0..n {
-                    let key = Cbor::do_decode(r, depth + 1)?.try_into()?;
-                    let val = Cbor::do_decode(r, depth + 1)?;
-                    map.push((key, val));
+                let (len, mut m) = decode_addnl(info, r)?;
+                for _ in 0..len {
+                    let (key, j) = Cbor::do_decode(r, depth + 1)?;
+                    let (val, k) = Cbor::do_decode(r, depth + 1)?;
+                    map.push((key.try_into()?, val));
+                    m += j + k;
                 }
-                Cbor::Major5(info, map)
+                (Cbor::Major5(info, map), m)
             }
-            (6, info) => Cbor::Major6(info, Tag::decode(info, r)?),
-            (7, info) => Cbor::Major7(info, SimpleValue::decode(info, r)?),
+            (6, info) => {
+                let (tag, m) = Tag::decode(info, r)?;
+                (Cbor::Major6(info, tag), m)
+            }
+            (7, info) => {
+                let (sval, m) = SimpleValue::decode(info, r)?;
+                (Cbor::Major7(info, sval), m)
+            }
             _ => unreachable!(),
         };
-        Ok(val)
+
+        Ok((val, (m + n)))
     }
 
     fn to_major_val(&self) -> u8 {
@@ -310,7 +340,7 @@ fn encode_hdr<W: io::Write>(major: u8, info: Info, w: &mut W) -> Result<usize> {
     Ok(1)
 }
 
-fn decode_hdr<R: io::Read>(r: &mut R) -> Result<(u8, Info)> {
+fn decode_hdr<R: io::Read>(r: &mut R) -> Result<(u8, Info, usize)> {
     let mut scratch = [0_u8; 8];
     read!(r, &mut scratch[..1]);
 
@@ -318,7 +348,7 @@ fn decode_hdr<R: io::Read>(r: &mut R) -> Result<(u8, Info)> {
 
     let major = (b & 0xe0) >> 5;
     let info = b & 0x1f;
-    Ok((major, info.try_into()?))
+    Ok((major, info.try_into()?, 1 /* only 1-byte read */))
 }
 
 fn encode_addnl<W: io::Write>(num: u64, w: &mut W) -> Result<usize> {
@@ -346,30 +376,42 @@ fn encode_addnl<W: io::Write>(num: u64, w: &mut W) -> Result<usize> {
     Ok(n)
 }
 
-fn decode_addnl<R: io::Read>(info: Info, r: &mut R) -> Result<u64> {
+fn decode_addnl<R: io::Read>(info: Info, r: &mut R) -> Result<(u64, usize)> {
     let mut scratch = [0_u8; 8];
-    let num = match info {
-        Info::Tiny(num) => num as u64,
+    let (num, n) = match info {
+        Info::Tiny(num) => (num as u64, 0),
         Info::U8 => {
             read!(r, &mut scratch[..1]);
-            u8::from_be_bytes(scratch[..1].try_into().unwrap()) as u64
+            (
+                u8::from_be_bytes(scratch[..1].try_into().unwrap()) as u64,
+                1,
+            )
         }
         Info::U16 => {
             read!(r, &mut scratch[..2]);
-            u16::from_be_bytes(scratch[..2].try_into().unwrap()) as u64
+            (
+                u16::from_be_bytes(scratch[..2].try_into().unwrap()) as u64,
+                2,
+            )
         }
         Info::U32 => {
             read!(r, &mut scratch[..4]);
-            u32::from_be_bytes(scratch[..4].try_into().unwrap()) as u64
+            (
+                u32::from_be_bytes(scratch[..4].try_into().unwrap()) as u64,
+                4,
+            )
         }
         Info::U64 => {
             read!(r, &mut scratch[..8]);
-            u64::from_be_bytes(scratch[..8].try_into().unwrap()) as u64
+            (
+                u64::from_be_bytes(scratch[..8].try_into().unwrap()) as u64,
+                8,
+            )
         }
-        Info::Indefinite => 0,
+        Info::Indefinite => (0, 0),
         _ => err_at!(FailCbor, msg: "no additional value")?,
     };
-    Ok(num)
+    Ok((num, n))
 }
 
 /// Major type 7, simple-value
@@ -475,12 +517,12 @@ impl SimpleValue {
         Ok(n)
     }
 
-    fn decode<R: io::Read>(info: Info, r: &mut R) -> Result<SimpleValue> {
+    fn decode<R: io::Read>(info: Info, r: &mut R) -> Result<(SimpleValue, usize)> {
         let mut scratch = [0_u8; 8];
-        let val = match info {
-            Info::Tiny(20) => SimpleValue::True,
-            Info::Tiny(21) => SimpleValue::False,
-            Info::Tiny(22) => SimpleValue::Null,
+        let (val, n) = match info {
+            Info::Tiny(20) => (SimpleValue::True, 0),
+            Info::Tiny(21) => (SimpleValue::False, 0),
+            Info::Tiny(22) => (SimpleValue::Null, 0),
             Info::Tiny(23) => err_at!(FailCbor, msg: "simple-value-undefined")?,
             Info::Tiny(_) => err_at!(FailCbor, msg: "simple-value-unassigned")?,
             Info::U8 => err_at!(FailCbor, msg: "simple-value-unassigned1")?,
@@ -488,19 +530,19 @@ impl SimpleValue {
             Info::U32 => {
                 read!(r, &mut scratch[..4]);
                 let val = f32::from_be_bytes(scratch[..4].try_into().unwrap());
-                SimpleValue::F32(val)
+                (SimpleValue::F32(val), 4)
             }
             Info::U64 => {
                 read!(r, &mut scratch[..8]);
                 let val = f64::from_be_bytes(scratch[..8].try_into().unwrap());
-                SimpleValue::F64(val)
+                (SimpleValue::F64(val), 8)
             }
             Info::Reserved28 => err_at!(FailCbor, msg: "simple-value-reserved")?,
             Info::Reserved29 => err_at!(FailCbor, msg: "simple-value-reserved")?,
             Info::Reserved30 => err_at!(FailCbor, msg: "simple-value-reserved")?,
             Info::Indefinite => err_at!(FailCbor, msg: "simple-value-break")?,
         };
-        Ok(val)
+        Ok((val, n))
     }
 }
 
@@ -548,12 +590,16 @@ impl Tag {
         Ok(n)
     }
 
-    fn decode<R: io::Read>(info: Info, r: &mut R) -> Result<Tag> {
-        let tag = match decode_addnl(info, r)? {
-            39 => Tag::Identifier(Box::new(Cbor::decode(r)?)),
-            val => Tag::Value(val),
+    fn decode<R: io::Read>(info: Info, r: &mut R) -> Result<(Tag, usize)> {
+        let (tag, n) = decode_addnl(info, r)?;
+        let (tag, m) = match tag {
+            39 => {
+                let (val, m) = Cbor::decode(r)?;
+                (Tag::Identifier(Box::new(val)), m)
+            }
+            val => (Tag::Value(val), 0),
         };
-        Ok(tag)
+        Ok((tag, m + n))
     }
 }
 
