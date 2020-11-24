@@ -53,6 +53,7 @@ macro_rules! err_at {
 }
 
 pub mod cbor;
+pub mod thread;
 pub mod traits;
 pub mod util;
 
@@ -68,6 +69,7 @@ pub enum Error {
     FailConvert(String, String),
     IOError(String, String),
     FailCbor(String, String),
+    IPCFail(String, String),
 }
 
 impl fmt::Display for Error {
@@ -79,6 +81,7 @@ impl fmt::Display for Error {
             FailConvert(p, msg) => write!(f, "{} FailConvert: {}", p, msg),
             IOError(p, msg) => write!(f, "{} IOError: {}", p, msg),
             FailCbor(p, msg) => write!(f, "{} FailCbor: {}", p, msg),
+            IPCFail(p, msg) => write!(f, "{} IPCFail: {}", p, msg),
         }
     }
 }

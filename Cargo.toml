@@ -11,4 +11,5 @@ documentation = "https://docs.rs/mkit/"
 edition = "2018"
 
 [dependencies]
+log = "0.4.8"
 mkit-derive = { path = "mkit-derive", version = "=0.1.0"}
