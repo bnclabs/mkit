@@ -40,11 +40,17 @@ pub enum Cbor {
 
 impl Cbor {
     /// Serialize this cbor value.
-    pub fn encode<W: io::Write>(&self, w: &mut W) -> Result<usize> {
+    pub fn encode<W>(&self, w: &mut W) -> Result<usize>
+    where
+        W: io::Write,
+    {
         self.do_encode(w, 1)
     }
 
-    fn do_encode<W: io::Write>(&self, w: &mut W, depth: u32) -> Result<usize> {
+    fn do_encode<W>(&self, w: &mut W, depth: u32) -> Result<usize>
+    where
+        W: io::Write,
+    {
         if depth > RECURSION_LIMIT {
             return err_at!(FailCbor, msg: "encode recursion limit exceeded");
         }
@@ -111,11 +117,17 @@ impl Cbor {
     }
 
     /// Deserialize a bytes from reader `r` to Cbor value.
-    pub fn decode<R: io::Read>(r: &mut R) -> Result<(Cbor, usize)> {
+    pub fn decode<R>(r: &mut R) -> Result<(Cbor, usize)>
+    where
+        R: io::Read,
+    {
         Cbor::do_decode(r, 1)
     }
 
-    fn do_decode<R: io::Read>(r: &mut R, depth: u32) -> Result<(Cbor, usize)> {
+    fn do_decode<R>(r: &mut R, depth: u32) -> Result<(Cbor, usize)>
+    where
+        R: io::Read,
+    {
         if depth > RECURSION_LIMIT {
             return err_at!(FailCbor, msg: "decode recursion limt exceeded");
         }
@@ -251,10 +263,25 @@ impl Cbor {
     }
 
     /// Convert cbor into optional value of type T.
-    pub fn into_optional<T: TryFrom<Cbor, Error = Error>>(self) -> Result<Option<T>> {
+    pub fn into_optional<T>(self) -> Result<Option<T>>
+    where
+        T: TryFrom<Cbor, Error = Error>,
+    {
         match self {
             Cbor::Major7(_, SimpleValue::Null) => Ok(None),
             val => Ok(Some(val.try_into()?)),
+        }
+    }
+
+    pub fn from_bytes(val: Vec<u8>) -> Result<Self> {
+        let n = err_at!(FailConvert, u64::try_from(val.len()))?;
+        Ok(Cbor::Major2(n.into(), val))
+    }
+
+    pub fn into_bytes(self) -> Result<Vec<u8>> {
+        match self {
+            Cbor::Major2(_, val) => Ok(val),
+            _ => err_at!(FailConvert, msg: "not bytes"),
         }
     }
 }
@@ -323,7 +350,10 @@ impl TryFrom<usize> for Info {
     }
 }
 
-fn encode_hdr<W: io::Write>(major: u8, info: Info, w: &mut W) -> Result<usize> {
+fn encode_hdr<W>(major: u8, info: Info, w: &mut W) -> Result<usize>
+where
+    W: io::Write,
+{
     let info = match info {
         Info::Tiny(val) if val <= 23 => val,
         Info::Tiny(val) => err_at!(FailCbor, msg: "{} > 23", val)?,
@@ -340,7 +370,10 @@ fn encode_hdr<W: io::Write>(major: u8, info: Info, w: &mut W) -> Result<usize> {
     Ok(1)
 }
 
-fn decode_hdr<R: io::Read>(r: &mut R) -> Result<(u8, Info, usize)> {
+fn decode_hdr<R>(r: &mut R) -> Result<(u8, Info, usize)>
+where
+    R: io::Read,
+{
     let mut scratch = [0_u8; 8];
     read!(r, &mut scratch[..1]);
 
@@ -351,7 +384,10 @@ fn decode_hdr<R: io::Read>(r: &mut R) -> Result<(u8, Info, usize)> {
     Ok((major, info.try_into()?, 1 /* only 1-byte read */))
 }
 
-fn encode_addnl<W: io::Write>(num: u64, w: &mut W) -> Result<usize> {
+fn encode_addnl<W>(num: u64, w: &mut W) -> Result<usize>
+where
+    W: io::Write,
+{
     let mut scratch = [0_u8; 8];
     let n = match num {
         0..=23 => 0,
@@ -376,7 +412,10 @@ fn encode_addnl<W: io::Write>(num: u64, w: &mut W) -> Result<usize> {
     Ok(n)
 }
 
-fn decode_addnl<R: io::Read>(info: Info, r: &mut R) -> Result<(u64, usize)> {
+fn decode_addnl<R>(info: Info, r: &mut R) -> Result<(u64, usize)>
+where
+    R: io::Read,
+{
     let mut scratch = [0_u8; 8];
     let (num, n) = match info {
         Info::Tiny(num) => (num as u64, 0),
@@ -490,7 +529,10 @@ impl SimpleValue {
         }
     }
 
-    fn encode<W: io::Write>(sval: &SimpleValue, w: &mut W) -> Result<usize> {
+    fn encode<W>(sval: &SimpleValue, w: &mut W) -> Result<usize>
+    where
+        W: io::Write,
+    {
         use SimpleValue::*;
 
         let mut scratch = [0_u8; 8];
@@ -517,7 +559,10 @@ impl SimpleValue {
         Ok(n)
     }
 
-    fn decode<R: io::Read>(info: Info, r: &mut R) -> Result<(SimpleValue, usize)> {
+    fn decode<R>(info: Info, r: &mut R) -> Result<(SimpleValue, usize)>
+    where
+        R: io::Read,
+    {
         let mut scratch = [0_u8; 8];
         let (val, n) = match info {
             Info::Tiny(20) => (SimpleValue::True, 0),
@@ -579,7 +624,10 @@ impl Tag {
         }
     }
 
-    fn encode<W: io::Write>(tag: &Tag, w: &mut W) -> Result<usize> {
+    fn encode<W>(tag: &Tag, w: &mut W) -> Result<usize>
+    where
+        W: io::Write,
+    {
         let num = tag.to_tag_value();
         let mut n = encode_addnl(num, w)?;
         n += match tag {
@@ -590,7 +638,10 @@ impl Tag {
         Ok(n)
     }
 
-    fn decode<R: io::Read>(info: Info, r: &mut R) -> Result<(Tag, usize)> {
+    fn decode<R>(info: Info, r: &mut R) -> Result<(Tag, usize)>
+    where
+        R: io::Read,
+    {
         let (tag, n) = decode_addnl(info, r)?;
         let (tag, m) = match tag {
             39 => {
@@ -717,19 +768,26 @@ impl TryFrom<Cbor> for Key {
     }
 }
 
-impl<T: Clone + Into<Cbor>, const N: usize> TryFrom<[T; N]> for Cbor {
+impl<T, const N: usize> TryFrom<[T; N]> for Cbor
+where
+    T: Clone + TryInto<Cbor, Error = Error>,
+{
     type Error = Error;
 
     fn try_from(arr: [T; N]) -> Result<Cbor> {
         let info = err_at!(FailConvert, u64::try_from(arr.len()))?.into();
-        Ok(Cbor::Major4(
-            info,
-            arr.iter().map(|x| x.clone().into()).collect(),
-        ))
+        let mut val: Vec<Cbor> = vec![];
+        for item in arr.iter() {
+            val.push(item.clone().try_into()?)
+        }
+        Ok(Cbor::Major4(info, val))
     }
 }
 
-impl<T: Copy + Default + TryFrom<Cbor, Error = Error>, const N: usize> TryFrom<Cbor> for [T; N] {
+impl<T, const N: usize> TryFrom<Cbor> for [T; N]
+where
+    T: Copy + Default + TryFrom<Cbor, Error = Error>,
+{
     type Error = Error;
 
     fn try_from(val: Cbor) -> Result<[T; N]> {
@@ -811,51 +869,73 @@ impl TryFrom<Cbor> for f64 {
     }
 }
 
-impl TryFrom<i64> for Cbor {
-    type Error = Error;
+macro_rules! convert_neg_num {
+    ($($t:ty)*) => {$(
+        impl TryFrom<Cbor> for $t {
+            type Error = Error;
 
-    fn try_from(val: i64) -> Result<Cbor> {
-        if val >= 0 {
-            Ok(err_at!(FailConvert, u64::try_from(val))?.try_into()?)
-        } else {
-            let val = err_at!(FailConvert, u64::try_from(val.abs() - 1))?;
-            let info = val.into();
-            Ok(Cbor::Major1(info, val))
+            fn try_from(val: Cbor) -> Result<$t> {
+                use std::result;
+
+                let val = match val {
+                    Cbor::Major0(_, val) => {
+                        let val: result::Result<$t, _> = val.try_into();
+                        err_at!(FailConvert, val)?
+                    }
+                    Cbor::Major1(_, val) => {
+                        let val: result::Result<$t, _> = (val + 1).try_into();
+                        -err_at!(FailConvert, val)?
+                    }
+                    _ => err_at!(FailConvert, msg: "not a number")?,
+                };
+                Ok(val)
+            }
         }
-    }
-}
 
-impl TryFrom<Cbor> for i64 {
-    type Error = Error;
+        impl TryFrom<$t> for Cbor {
+            type Error = Error;
 
-    fn try_from(val: Cbor) -> Result<i64> {
-        let val = match val {
-            Cbor::Major0(_, val) => err_at!(FailConvert, i64::try_from(val))?,
-            Cbor::Major1(_, val) => -err_at!(FailConvert, i64::try_from(val + 1))?,
-            _ => err_at!(FailConvert, msg: "not a number")?,
-        };
-        Ok(val)
-    }
-}
-
-impl TryFrom<u64> for Cbor {
-    type Error = Error;
-
-    fn try_from(val: u64) -> Result<Cbor> {
-        Ok(Cbor::Major0(val.into(), val))
-    }
-}
-
-impl TryFrom<Cbor> for u64 {
-    type Error = Error;
-
-    fn try_from(val: Cbor) -> Result<u64> {
-        match val {
-            Cbor::Major0(_, val) => Ok(val),
-            _ => err_at!(FailConvert, msg: "not a number"),
+            fn try_from(val: $t) -> Result<Cbor> {
+                let val: $t = val.into();
+                if val >= 0 {
+                    Ok(err_at!(FailConvert, u64::try_from(val))?.try_into()?)
+                } else {
+                    let val = err_at!(FailConvert, u64::try_from(val.abs() - 1))?;
+                    let info = val.into();
+                    Ok(Cbor::Major1(info, val))
+                }
+            }
         }
-    }
+    )*}
 }
+
+convert_neg_num! {i64 i32 i16 i8}
+
+macro_rules! convert_pos_num {
+    ($($t:ty)*) => {$(
+        impl TryFrom<$t> for Cbor {
+            type Error = Error;
+
+            fn try_from(val: $t) -> Result<Cbor> {
+                let val = u64::from(val);
+                Ok(Cbor::Major0(val.into(), val))
+            }
+        }
+
+        impl TryFrom<Cbor> for $t {
+            type Error = Error;
+
+            fn try_from(val: Cbor) -> Result<$t> {
+                match val {
+                    Cbor::Major0(_, val) => Ok(err_at!(FailConvert, val.try_into())?),
+                    _ => err_at!(FailConvert, msg: "not a number"),
+                }
+            }
+        }
+    )*}
+}
+
+convert_pos_num! {u64 u32 u16 u8}
 
 impl TryFrom<usize> for Cbor {
     type Error = Error;
@@ -907,23 +987,48 @@ impl<'a> TryFrom<&'a [u8]> for Cbor {
     }
 }
 
-impl TryFrom<Vec<u8>> for Cbor {
+impl<T> TryFrom<Vec<T>> for Cbor
+where
+    T: TryInto<Cbor, Error = Error>,
+{
     type Error = Error;
 
-    fn try_from(val: Vec<u8>) -> Result<Cbor> {
+    fn try_from(val: Vec<T>) -> Result<Cbor> {
         let n = err_at!(FailConvert, u64::try_from(val.len()))?;
-        Ok(Cbor::Major2(n.into(), val))
+        let mut arr = vec![];
+        for item in val.into_iter() {
+            arr.push(item.try_into()?)
+        }
+        Ok(Cbor::Major4(n.into(), arr))
     }
 }
 
-impl TryFrom<Cbor> for Vec<u8> {
+impl<T> TryFrom<Cbor> for Vec<T>
+where
+    T: TryFrom<Cbor, Error = Error>,
+{
     type Error = Error;
 
-    fn try_from(val: Cbor) -> Result<Vec<u8>> {
+    fn try_from(val: Cbor) -> Result<Vec<T>> {
         match val {
-            Cbor::Major2(_, val) => Ok(val),
-            _ => err_at!(FailConvert, msg: "not bytes"),
+            Cbor::Major4(_, data) => {
+                let mut arr = vec![];
+                for item in data.into_iter() {
+                    arr.push(item.try_into()?)
+                }
+                Ok(arr)
+            }
+            _ => err_at!(FailConvert, msg: "not a vector"),
         }
+    }
+}
+
+impl TryFrom<String> for Cbor {
+    type Error = Error;
+
+    fn try_from(val: String) -> Result<Cbor> {
+        let n = err_at!(FailConvert, u64::try_from(val.len()))?;
+        Ok(Cbor::Major3(n.into(), val.as_bytes().to_vec()))
     }
 }
 
@@ -945,36 +1050,6 @@ impl TryFrom<Cbor> for String {
         match val {
             Cbor::Major3(_, val) => Ok(err_at!(FailConvert, from_utf8(&val))?.to_string()),
             _ => err_at!(FailConvert, msg: "not utf8-string"),
-        }
-    }
-}
-
-impl<T: TryInto<Cbor, Error = Error>> TryFrom<Vec<T>> for Cbor {
-    type Error = Error;
-
-    fn try_from(val: Vec<T>) -> Result<Cbor> {
-        let n = err_at!(FailConvert, u64::try_from(val.len()))?;
-        let mut arr = vec![];
-        for item in val.into_iter() {
-            arr.push(item.try_into()?)
-        }
-        Ok(Cbor::Major4(n.into(), arr))
-    }
-}
-
-impl<T: TryFrom<Cbor, Error = Error>> TryFrom<Cbor> for Vec<T> {
-    type Error = Error;
-
-    fn try_from(val: Cbor) -> Result<Vec<T>> {
-        match val {
-            Cbor::Major4(_, data) => {
-                let mut arr = vec![];
-                for item in data.into_iter() {
-                    arr.push(item.try_into()?)
-                }
-                Ok(arr)
-            }
-            _ => err_at!(FailConvert, msg: "not a vector"),
         }
     }
 }
@@ -1019,7 +1094,10 @@ impl TryFrom<Cbor> for Vec<(Key, Cbor)> {
     }
 }
 
-impl<T: TryInto<Cbor, Error = Error>> TryFrom<Option<T>> for Cbor {
+impl<T> TryFrom<Option<T>> for Cbor
+where
+    T: TryInto<Cbor, Error = Error>,
+{
     type Error = Error;
 
     fn try_from(val: Option<T>) -> Result<Cbor> {
@@ -1029,3 +1107,20 @@ impl<T: TryInto<Cbor, Error = Error>> TryFrom<Option<T>> for Cbor {
         }
     }
 }
+
+macro_rules! convert_option {
+    ($($t:ty)*) => {$(
+        impl TryFrom<Cbor> for Option<$t> {
+            type Error = Error;
+
+            fn try_from(val: Cbor) -> Result<Option<$t>> {
+                match val {
+                    Cbor::Major7(_, SimpleValue::Null) => Ok(None),
+                    val => Ok(Some(val.try_into()?)),
+                }
+            }
+        }
+    )*}
+}
+
+convert_option! {u64 u32 u16 i64 i32 i16 i8 bool f32 f64 usize isize String}

@@ -57,6 +57,8 @@ pub mod thread;
 pub mod traits;
 pub mod util;
 
+pub use thread::Thread;
+
 #[doc(hidden)]
 pub use mkit_derive::*;
 
@@ -70,6 +72,7 @@ pub enum Error {
     IOError(String, String),
     FailCbor(String, String),
     IPCFail(String, String),
+    ThreadFail(String, String),
 }
 
 impl fmt::Display for Error {
@@ -82,6 +85,7 @@ impl fmt::Display for Error {
             IOError(p, msg) => write!(f, "{} IOError: {}", p, msg),
             FailCbor(p, msg) => write!(f, "{} FailCbor: {}", p, msg),
             IPCFail(p, msg) => write!(f, "{} IPCFail: {}", p, msg),
+            ThreadFail(p, msg) => write!(f, "{} ThreadFail: {}", p, msg),
         }
     }
 }

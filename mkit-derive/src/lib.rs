@@ -6,6 +6,8 @@ use proc_macro_error::{abort_call_site, proc_macro_error};
 use quote::quote;
 use syn::*;
 
+// mod ty;
+
 lazy_static! {
     pub(crate) static ref UNNAMED_FIELDS: Vec<&'static str> =
         vec!["a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l",];
@@ -340,7 +342,11 @@ fn from_cbor_to_enum(name: &Ident, generics: &Generics, variants: &[&Variant]) -
 fn named_fields_to_cbor(fields: &FieldsNamed) -> TokenStream {
     let mut tokens = TokenStream::new();
     for field in fields.named.iter() {
+        let as_bytes = has_cbor_bytes(&field.attrs);
         match &field.ident {
+            Some(field_name) if as_bytes => tokens.extend(quote! {
+                items.push(mkit::cbor::Cbor::from_bytes(value.#field_name)?);
+            }),
             Some(field_name) => tokens.extend(quote! {
                 items.push(value.#field_name.try_into()?);
             }),
@@ -382,9 +388,16 @@ fn cbor_to_named_fields(fields: &FieldsNamed) -> TokenStream {
     let mut tokens = TokenStream::new();
     for field in fields.named.iter() {
         let field_name = field.ident.as_ref().unwrap();
-        tokens.extend(quote! {
-            #field_name: items.remove(0).try_into()?,
-        });
+        let field_tokens = if has_cbor_bytes(&field.attrs) {
+            quote! {
+                #field_name: items.remove(0).into_bytes()?,
+            }
+        } else {
+            quote! {
+                #field_name: items.remove(0).try_into()?,
+            }
+        };
+        tokens.extend(field_tokens);
     }
     tokens
 }
@@ -409,3 +422,56 @@ fn cbor_to_unnamed_fields(fields: &FieldsUnnamed) -> TokenStream {
     }
     tokens
 }
+
+fn has_cbor_bytes(attrs: &[syn::Attribute]) -> bool {
+    for attr in attrs.iter() {
+        match attr.parse_meta().unwrap() {
+            syn::Meta::List(meta_list) => {
+                for item in meta_list.nested.iter() {
+                    match item {
+                        syn::NestedMeta::Meta(syn::Meta::Path(p)) => {
+                            for seg in p.segments.iter() {
+                                if seg.ident.to_string() == "bytes" {
+                                    return true;
+                                }
+                            }
+                        }
+                        _ => (),
+                    }
+                }
+            }
+            _ => (),
+        }
+    }
+
+    return false;
+}
+
+//#[derive(Copy, Clone, PartialEq, Debug)]
+//enum Sp {
+//    Option,
+//    Bytes,
+//    VecBytes,
+//    VecOption,
+//    OptionBytes,
+//}
+//
+//fn from_syn_ty(ty: &syn::Type) -> Sp<Self> {
+//    if is_generic_ty(ty, "Vec") {
+//        t(Vec)
+//    } else if let Some(subty) = subty_if_name(ty, "Option") {
+//        if is_generic_ty(subty, "Option") {
+//            t(OptionOption)
+//        } else if is_generic_ty(subty, "Vec") {
+//            t(OptionVec)
+//        } else {
+//            t(Option)
+//        }
+//    } else {
+//        t(Other)
+//    }
+//}
+//
+//fn is_generic_ty(ty: &syn::Type, name: &str) -> bool {
+//    subty_if_name(ty, name).is_some()
+//}
