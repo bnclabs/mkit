@@ -20,6 +20,14 @@ macro_rules! write {
     };
 }
 
+pub trait IntoCbor {
+    fn into_cbor(self) -> Result<Cbor>;
+}
+
+pub trait FromCbor: Sized {
+    fn from_cbor(val: Cbor) -> Result<Self>;
+}
+
 /// Recursion limit for nested Cbor objects.
 const RECURSION_LIMIT: u32 = 1000;
 
@@ -91,7 +99,7 @@ impl Cbor {
                 let m = encode_addnl(err_at!(FailConvert, u64::try_from(map.len()))?, w)?;
                 let mut acc = 0;
                 for (key, val) in map.iter() {
-                    let key: Cbor = key.clone().try_into()?;
+                    let key = key.clone().into_cbor()?;
                     acc += key.do_encode(w, depth + 1)?;
                     acc += val.do_encode(w, depth + 1)?;
                 }
@@ -218,7 +226,7 @@ impl Cbor {
                         Cbor::Major7(_, SimpleValue::Break) => break,
                         val => val,
                     };
-                    map.push((key.try_into()?, val));
+                    map.push((Key::from_cbor(key)?, val));
                     m += j + k;
                 }
                 (Cbor::Major5(info, map), m)
@@ -229,7 +237,7 @@ impl Cbor {
                 for _ in 0..len {
                     let (key, j) = Cbor::do_decode(r, depth + 1)?;
                     let (val, k) = Cbor::do_decode(r, depth + 1)?;
-                    map.push((key.try_into()?, val));
+                    map.push((Key::from_cbor(key)?, val));
                     m += j + k;
                 }
                 (Cbor::Major5(info, map), m)
@@ -259,17 +267,6 @@ impl Cbor {
             Cbor::Major6(_, _) => 6,
             Cbor::Major7(_, _) => 7,
             Cbor::Binary(data) => (data[0] & 0xe0) >> 5,
-        }
-    }
-
-    /// Convert cbor into optional value of type T.
-    pub fn into_optional<T>(self) -> Result<Option<T>>
-    where
-        T: TryFrom<Cbor, Error = Error>,
-    {
-        match self {
-            Cbor::Major7(_, SimpleValue::Null) => Ok(None),
-            val => Ok(Some(val.try_into()?)),
         }
     }
 
@@ -720,11 +717,9 @@ impl PartialOrd for Key {
     }
 }
 
-impl TryFrom<Key> for Cbor {
-    type Error = Error;
-
-    fn try_from(key: Key) -> Result<Cbor> {
-        let val = match key {
+impl IntoCbor for Key {
+    fn into_cbor(self: Key) -> Result<Cbor> {
+        let val = match self {
             Key::U64(key) => Cbor::Major0(key.into(), key),
             Key::N64(key) if key >= 0 => {
                 let val = err_at!(FailConvert, u64::try_from(key))?;
@@ -746,10 +741,8 @@ impl TryFrom<Key> for Cbor {
     }
 }
 
-impl TryFrom<Cbor> for Key {
-    type Error = Error;
-
-    fn try_from(val: Cbor) -> Result<Key> {
+impl FromCbor for Key {
+    fn from_cbor(val: Cbor) -> Result<Key> {
         use std::str::from_utf8;
 
         let key = match val {
@@ -768,35 +761,31 @@ impl TryFrom<Cbor> for Key {
     }
 }
 
-impl<T, const N: usize> TryFrom<[T; N]> for Cbor
+impl<T, const N: usize> IntoCbor for [T; N]
 where
-    T: Clone + TryInto<Cbor, Error = Error>,
+    T: Clone + IntoCbor,
 {
-    type Error = Error;
-
-    fn try_from(arr: [T; N]) -> Result<Cbor> {
-        let info = err_at!(FailConvert, u64::try_from(arr.len()))?.into();
+    fn into_cbor(self) -> Result<Cbor> {
+        let info = err_at!(FailConvert, u64::try_from(self.len()))?.into();
         let mut val: Vec<Cbor> = vec![];
-        for item in arr.iter() {
-            val.push(item.clone().try_into()?)
+        for item in self.iter() {
+            val.push(item.clone().into_cbor()?)
         }
         Ok(Cbor::Major4(info, val))
     }
 }
 
-impl<T, const N: usize> TryFrom<Cbor> for [T; N]
+impl<T, const N: usize> FromCbor for [T; N]
 where
-    T: Copy + Default + TryFrom<Cbor, Error = Error>,
+    T: Copy + Default + FromCbor,
 {
-    type Error = Error;
-
-    fn try_from(val: Cbor) -> Result<[T; N]> {
+    fn from_cbor(val: Cbor) -> Result<[T; N]> {
         let mut arr = [T::default(); N];
         let n = arr.len();
         match val {
             Cbor::Major4(_, data) if n == data.len() => {
                 for (i, item) in data.into_iter().enumerate() {
-                    arr[i] = item.try_into()?;
+                    arr[i] = T::from_cbor(item)?;
                 }
                 Ok(arr)
             }
@@ -808,21 +797,17 @@ where
     }
 }
 
-impl TryFrom<bool> for Cbor {
-    type Error = Error;
-
-    fn try_from(val: bool) -> Result<Cbor> {
-        match val {
+impl IntoCbor for bool {
+    fn into_cbor(self) -> Result<Cbor> {
+        match self {
             true => SimpleValue::True.try_into(),
             false => SimpleValue::False.try_into(),
         }
     }
 }
 
-impl TryFrom<Cbor> for bool {
-    type Error = Error;
-
-    fn try_from(val: Cbor) -> Result<bool> {
+impl FromCbor for bool {
+    fn from_cbor(val: Cbor) -> Result<bool> {
         match val {
             Cbor::Major7(_, SimpleValue::True) => Ok(true),
             Cbor::Major7(_, SimpleValue::False) => Ok(false),
@@ -831,18 +816,14 @@ impl TryFrom<Cbor> for bool {
     }
 }
 
-impl TryFrom<f32> for Cbor {
-    type Error = Error;
-
-    fn try_from(val: f32) -> Result<Cbor> {
-        SimpleValue::F32(val).try_into()
+impl IntoCbor for f32 {
+    fn into_cbor(self) -> Result<Cbor> {
+        SimpleValue::F32(self).try_into()
     }
 }
 
-impl TryFrom<Cbor> for f32 {
-    type Error = Error;
-
-    fn try_from(val: Cbor) -> Result<f32> {
+impl FromCbor for f32 {
+    fn from_cbor(val: Cbor) -> Result<f32> {
         match val {
             Cbor::Major7(_, SimpleValue::F32(val)) => Ok(val),
             _ => err_at!(FailConvert, msg: "not f32"),
@@ -850,18 +831,14 @@ impl TryFrom<Cbor> for f32 {
     }
 }
 
-impl TryFrom<f64> for Cbor {
-    type Error = Error;
-
-    fn try_from(val: f64) -> Result<Cbor> {
-        SimpleValue::F64(val).try_into()
+impl IntoCbor for f64 {
+    fn into_cbor(self) -> Result<Cbor> {
+        SimpleValue::F64(self).try_into()
     }
 }
 
-impl TryFrom<Cbor> for f64 {
-    type Error = Error;
-
-    fn try_from(val: Cbor) -> Result<f64> {
+impl FromCbor for f64 {
+    fn from_cbor(val: Cbor) -> Result<f64> {
         match val {
             Cbor::Major7(_, SimpleValue::F64(val)) => Ok(val),
             _ => err_at!(FailConvert, msg: "not f64"),
@@ -871,10 +848,8 @@ impl TryFrom<Cbor> for f64 {
 
 macro_rules! convert_neg_num {
     ($($t:ty)*) => {$(
-        impl TryFrom<Cbor> for $t {
-            type Error = Error;
-
-            fn try_from(val: Cbor) -> Result<$t> {
+        impl FromCbor for $t {
+            fn from_cbor(val: Cbor) -> Result<$t> {
                 use std::result;
 
                 let val = match val {
@@ -892,13 +867,11 @@ macro_rules! convert_neg_num {
             }
         }
 
-        impl TryFrom<$t> for Cbor {
-            type Error = Error;
-
-            fn try_from(val: $t) -> Result<Cbor> {
-                let val: $t = val.into();
+        impl IntoCbor for $t {
+            fn into_cbor(self) -> Result<Cbor> {
+                let val: i64 = self.into();
                 if val >= 0 {
-                    Ok(err_at!(FailConvert, u64::try_from(val))?.try_into()?)
+                    Ok(err_at!(FailConvert, u64::try_from(val))?.into_cbor()?)
                 } else {
                     let val = err_at!(FailConvert, u64::try_from(val.abs() - 1))?;
                     let info = val.into();
@@ -913,23 +886,19 @@ convert_neg_num! {i64 i32 i16 i8}
 
 macro_rules! convert_pos_num {
     ($($t:ty)*) => {$(
-        impl TryFrom<$t> for Cbor {
-            type Error = Error;
-
-            fn try_from(val: $t) -> Result<Cbor> {
-                let val = u64::from(val);
-                Ok(Cbor::Major0(val.into(), val))
-            }
-        }
-
-        impl TryFrom<Cbor> for $t {
-            type Error = Error;
-
-            fn try_from(val: Cbor) -> Result<$t> {
+        impl FromCbor for $t {
+            fn from_cbor(val: Cbor) -> Result<$t> {
                 match val {
                     Cbor::Major0(_, val) => Ok(err_at!(FailConvert, val.try_into())?),
                     _ => err_at!(FailConvert, msg: "not a number"),
                 }
+            }
+        }
+
+        impl IntoCbor for $t {
+            fn into_cbor(self) -> Result<Cbor> {
+                let val = u64::from(self);
+                Ok(Cbor::Major0(val.into(), val))
             }
         }
     )*}
@@ -937,19 +906,15 @@ macro_rules! convert_pos_num {
 
 convert_pos_num! {u64 u32 u16 u8}
 
-impl TryFrom<usize> for Cbor {
-    type Error = Error;
-
-    fn try_from(val: usize) -> Result<Cbor> {
-        let val = err_at!(FailConvert, u64::try_from(val))?;
-        Ok(val.try_into()?)
+impl IntoCbor for usize {
+    fn into_cbor(self) -> Result<Cbor> {
+        let val = err_at!(FailConvert, u64::try_from(self))?;
+        Ok(val.into_cbor()?)
     }
 }
 
-impl TryFrom<Cbor> for usize {
-    type Error = Error;
-
-    fn try_from(val: Cbor) -> Result<usize> {
+impl FromCbor for usize {
+    fn from_cbor(val: Cbor) -> Result<usize> {
         match val {
             Cbor::Major0(_, val) => err_at!(FailConvert, usize::try_from(val)),
             _ => err_at!(FailConvert, msg: "not a number"),
@@ -957,18 +922,14 @@ impl TryFrom<Cbor> for usize {
     }
 }
 
-impl TryFrom<isize> for Cbor {
-    type Error = Error;
-
-    fn try_from(val: isize) -> Result<Cbor> {
-        err_at!(FailConvert, i64::try_from(val))?.try_into()
+impl IntoCbor for isize {
+    fn into_cbor(self) -> Result<Cbor> {
+        err_at!(FailConvert, i64::try_from(self))?.into_cbor()
     }
 }
 
-impl TryFrom<Cbor> for isize {
-    type Error = Error;
-
-    fn try_from(val: Cbor) -> Result<isize> {
+impl FromCbor for isize {
+    fn from_cbor(val: Cbor) -> Result<isize> {
         let val = match val {
             Cbor::Major0(_, val) => err_at!(FailConvert, isize::try_from(val))?,
             Cbor::Major1(_, val) => -err_at!(FailConvert, isize::try_from(val + 1))?,
@@ -978,43 +939,37 @@ impl TryFrom<Cbor> for isize {
     }
 }
 
-impl<'a> TryFrom<&'a [u8]> for Cbor {
-    type Error = Error;
-
-    fn try_from(val: &'a [u8]) -> Result<Cbor> {
-        let n = err_at!(FailConvert, u64::try_from(val.len()))?;
-        Ok(Cbor::Major2(n.into(), val.to_vec()))
+impl<'a> IntoCbor for &'a [u8] {
+    fn into_cbor(self) -> Result<Cbor> {
+        let n = err_at!(FailConvert, u64::try_from(self.len()))?;
+        Ok(Cbor::Major2(n.into(), self.to_vec()))
     }
 }
 
-impl<T> TryFrom<Vec<T>> for Cbor
+impl<T> IntoCbor for Vec<T>
 where
-    T: TryInto<Cbor, Error = Error>,
+    T: IntoCbor,
 {
-    type Error = Error;
-
-    fn try_from(val: Vec<T>) -> Result<Cbor> {
-        let n = err_at!(FailConvert, u64::try_from(val.len()))?;
+    fn into_cbor(self) -> Result<Cbor> {
+        let n = err_at!(FailConvert, u64::try_from(self.len()))?;
         let mut arr = vec![];
-        for item in val.into_iter() {
-            arr.push(item.try_into()?)
+        for item in self.into_iter() {
+            arr.push(item.into_cbor()?)
         }
         Ok(Cbor::Major4(n.into(), arr))
     }
 }
 
-impl<T> TryFrom<Cbor> for Vec<T>
+impl<T> FromCbor for Vec<T>
 where
-    T: TryFrom<Cbor, Error = Error>,
+    T: FromCbor + Sized,
 {
-    type Error = Error;
-
-    fn try_from(val: Cbor) -> Result<Vec<T>> {
+    fn from_cbor(val: Cbor) -> Result<Vec<T>> {
         match val {
             Cbor::Major4(_, data) => {
                 let mut arr = vec![];
                 for item in data.into_iter() {
-                    arr.push(item.try_into()?)
+                    arr.push(T::from_cbor(item)?)
                 }
                 Ok(arr)
             }
@@ -1023,30 +978,23 @@ where
     }
 }
 
-impl TryFrom<String> for Cbor {
-    type Error = Error;
-
-    fn try_from(val: String) -> Result<Cbor> {
-        let n = err_at!(FailConvert, u64::try_from(val.len()))?;
-        Ok(Cbor::Major3(n.into(), val.as_bytes().to_vec()))
+impl<'a> IntoCbor for &'a str {
+    fn into_cbor(self) -> Result<Cbor> {
+        let n = err_at!(FailConvert, u64::try_from(self.len()))?;
+        Ok(Cbor::Major3(n.into(), self.as_bytes().to_vec()))
     }
 }
 
-impl<'a> TryFrom<&'a str> for Cbor {
-    type Error = Error;
-
-    fn try_from(val: &'a str) -> Result<Cbor> {
-        let n = err_at!(FailConvert, u64::try_from(val.len()))?;
-        Ok(Cbor::Major3(n.into(), val.as_bytes().to_vec()))
+impl IntoCbor for String {
+    fn into_cbor(self) -> Result<Cbor> {
+        let n = err_at!(FailConvert, u64::try_from(self.len()))?;
+        Ok(Cbor::Major3(n.into(), self.as_bytes().to_vec()))
     }
 }
 
-impl TryFrom<Cbor> for String {
-    type Error = Error;
-
-    fn try_from(val: Cbor) -> Result<String> {
+impl FromCbor for String {
+    fn from_cbor(val: Cbor) -> Result<String> {
         use std::str::from_utf8;
-
         match val {
             Cbor::Major3(_, val) => Ok(err_at!(FailConvert, from_utf8(&val))?.to_string()),
             _ => err_at!(FailConvert, msg: "not utf8-string"),
@@ -1054,19 +1002,15 @@ impl TryFrom<Cbor> for String {
     }
 }
 
-impl TryFrom<Vec<Cbor>> for Cbor {
-    type Error = Error;
-
-    fn try_from(val: Vec<Cbor>) -> Result<Cbor> {
-        let n = err_at!(FailConvert, u64::try_from(val.len()))?;
-        Ok(Cbor::Major4(n.into(), val))
+impl IntoCbor for Vec<Cbor> {
+    fn into_cbor(self) -> Result<Cbor> {
+        let n = err_at!(FailConvert, u64::try_from(self.len()))?;
+        Ok(Cbor::Major4(n.into(), self))
     }
 }
 
-impl TryFrom<Cbor> for Vec<Cbor> {
-    type Error = Error;
-
-    fn try_from(val: Cbor) -> Result<Vec<Cbor>> {
+impl FromCbor for Vec<Cbor> {
+    fn from_cbor(val: Cbor) -> Result<Vec<Cbor>> {
         match val {
             Cbor::Major4(_, data) => Ok(data),
             _ => err_at!(FailConvert, msg: "not a vector"),
@@ -1074,19 +1018,15 @@ impl TryFrom<Cbor> for Vec<Cbor> {
     }
 }
 
-impl TryFrom<Vec<(Key, Cbor)>> for Cbor {
-    type Error = Error;
-
-    fn try_from(val: Vec<(Key, Cbor)>) -> Result<Cbor> {
-        let n = err_at!(FailConvert, u64::try_from(val.len()))?;
-        Ok(Cbor::Major5(n.into(), val))
+impl IntoCbor for Vec<(Key, Cbor)> {
+    fn into_cbor(self) -> Result<Cbor> {
+        let n = err_at!(FailConvert, u64::try_from(self.len()))?;
+        Ok(Cbor::Major5(n.into(), self))
     }
 }
 
-impl TryFrom<Cbor> for Vec<(Key, Cbor)> {
-    type Error = Error;
-
-    fn try_from(val: Cbor) -> Result<Vec<(Key, Cbor)>> {
+impl FromCbor for Vec<(Key, Cbor)> {
+    fn from_cbor(val: Cbor) -> Result<Vec<(Key, Cbor)>> {
         match val {
             Cbor::Major5(_, data) => Ok(data),
             _ => err_at!(FailConvert, msg: "not a map"),
@@ -1094,33 +1034,26 @@ impl TryFrom<Cbor> for Vec<(Key, Cbor)> {
     }
 }
 
-impl<T> TryFrom<Option<T>> for Cbor
+impl<T> IntoCbor for Option<T>
 where
-    T: TryInto<Cbor, Error = Error>,
+    T: IntoCbor,
 {
-    type Error = Error;
-
-    fn try_from(val: Option<T>) -> Result<Cbor> {
-        match val {
-            Some(val) => val.try_into(),
+    fn into_cbor(self) -> Result<Cbor> {
+        match self {
+            Some(val) => val.into_cbor(),
             None => SimpleValue::Null.try_into(),
         }
     }
 }
 
-macro_rules! convert_option {
-    ($($t:ty)*) => {$(
-        impl TryFrom<Cbor> for Option<$t> {
-            type Error = Error;
-
-            fn try_from(val: Cbor) -> Result<Option<$t>> {
-                match val {
-                    Cbor::Major7(_, SimpleValue::Null) => Ok(None),
-                    val => Ok(Some(val.try_into()?)),
-                }
-            }
+impl<T> FromCbor for Option<T>
+where
+    T: FromCbor + Sized,
+{
+    fn from_cbor(val: Cbor) -> Result<Option<T>> {
+        match val {
+            Cbor::Major7(_, SimpleValue::Null) => Ok(None),
+            val => Ok(Some(T::from_cbor(val)?)),
         }
-    )*}
+    }
 }
-
-convert_option! {u64 u32 u16 i64 i32 i16 i8 bool f32 f64 usize isize String}

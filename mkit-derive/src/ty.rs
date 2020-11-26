@@ -1,7 +1,14 @@
 use syn::{self, PathArguments::AngleBracketed};
 
-pub fn subty_if_name<'a>(ty: &'a syn::Type, name: &str) -> Option<&'a syn::Type> {
-    subty_if(ty, |seg| seg.ident == name)
+pub fn subty_of_vec<'a>(ty: &'a syn::Type) -> Option<&'a syn::Type> {
+    subty_if(ty, |seg| seg.ident == "Vec")
+}
+
+pub fn ty_u8<'a>(ty: &'a syn::Type) -> bool {
+    let ty = strip_group(ty);
+    only_last_segment(ty)
+        .filter(|seg| seg.ident == "u8")
+        .is_some()
 }
 
 fn subty_if<F>(ty: &syn::Type, f: F) -> Option<&syn::Type>
