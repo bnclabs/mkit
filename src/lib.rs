@@ -54,7 +54,6 @@ macro_rules! err_at {
 
 pub mod cbor;
 pub mod thread;
-pub mod traits;
 pub mod util;
 
 pub use thread::Thread;

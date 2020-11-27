@@ -14,7 +14,7 @@ lazy_static! {
 }
 
 #[proc_macro_derive(Cborize, attributes(cbor))]
-// #[proc_macro_error]
+#[proc_macro_error]
 pub fn cborize_type(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let input: DeriveInput = syn::parse(input).unwrap();
     let gen = match &input.data {
