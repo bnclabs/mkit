@@ -1,5 +1,7 @@
 //! Simple and easy CBOR serialization.
 
+use arbitrary::{self, Arbitrary, Unstructured};
+
 use std::{
     cmp,
     convert::{TryFrom, TryInto},
@@ -8,32 +10,38 @@ use std::{
 
 use crate::{Error, Result};
 
-macro_rules! read {
+macro_rules! read_r {
     ($r:ident, $buf:expr) => {
         err_at!(IOError, $r.read_exact($buf))?
     };
 }
 
-macro_rules! write {
+macro_rules! write_w {
     ($w:ident, $buf:expr) => {
         err_at!(IOError, $w.write($buf))?
     };
 }
 
+/// Convert the implementing type to Cbor, which can then be encoded into
+/// bytes.
 pub trait IntoCbor {
     fn into_cbor(self) -> Result<Cbor>;
 }
 
+/// Conver the implementing type from Cbor, the cbor value would have been
+/// obtained after decoding.
 pub trait FromCbor: Sized {
     fn from_cbor(val: Cbor) -> Result<Self>;
 }
 
 /// Recursion limit for nested Cbor objects.
-const RECURSION_LIMIT: u32 = 1000;
+pub const RECURSION_LIMIT: u32 = 1000;
 
-/// Cbor type parametrised over list type and map type. Use one of the
-/// conversion trait to convert language-native-type to a Cbor variant.
-#[derive(Clone, Eq, PartialEq)]
+/// Cbor enumerated over its major types.
+///
+/// Use one of the conversion trait to convert language-native-type to a
+/// Cbor variant. For lazy decoding, use [Cbor::Binary] variant.
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub enum Cbor {
     Major0(Info, u64),              // uint 0-23,24,25,26,27
     Major1(Info, u64),              // nint 0-23,24,25,26,27
@@ -44,6 +52,64 @@ pub enum Cbor {
     Major6(Info, Tag),              // tags similar to major0
     Major7(Info, SimpleValue),      // type refer SimpleValue
     Binary(Vec<u8>),                // for lazy decoding cbor data
+}
+
+impl arbitrary::Arbitrary for Cbor {
+    fn arbitrary(u: &mut Unstructured) -> arbitrary::Result<Self> {
+        use Cbor::*;
+
+        let major = u.arbitrary::<u8>()? % 8;
+        let val: Cbor = match major {
+            0 => {
+                let val: u64 = u.arbitrary()?;
+                let info: Info = val.into();
+                Major0(info, val)
+            }
+            1 => {
+                let val: u64 = {
+                    let val: i64 = u.arbitrary()?;
+                    val.abs().try_into().unwrap()
+                };
+                let info: Info = val.into();
+                Major1(info, val)
+            }
+            2 => {
+                let val: Vec<u8> = u.arbitrary()?;
+                let n: u64 = val.len().try_into().unwrap();
+                let info: Info = n.into();
+                Major2(info, val)
+            }
+            3 => {
+                let val: String = u.arbitrary()?;
+                let n: u64 = val.len().try_into().unwrap();
+                let info: Info = n.into();
+                Major3(info, val.as_bytes().to_vec())
+            }
+            4 => {
+                let val: Vec<Cbor> = u.arbitrary()?;
+                let n: u64 = val.len().try_into().unwrap();
+                let info: Info = n.into();
+                Major4(info, val)
+            }
+            5 => {
+                let val: Vec<(Key, Cbor)> = u.arbitrary()?;
+                let n: u64 = val.len().try_into().unwrap();
+                let info: Info = n.into();
+                Major5(info, val)
+            }
+            6 => {
+                let tag: Tag = u.arbitrary()?;
+                tag.into()
+            }
+            7 => {
+                let sval: SimpleValue = u.arbitrary()?;
+                sval.try_into().unwrap()
+            }
+            _ => unreachable!(),
+        };
+
+        Ok(val)
+    }
 }
 
 impl Cbor {
@@ -76,13 +142,13 @@ impl Cbor {
             Cbor::Major2(info, byts) => {
                 let n = encode_hdr(major, *info, w)?;
                 let m = encode_addnl(err_at!(FailConvert, u64::try_from(byts.len()))?, w)?;
-                write!(w, &byts);
+                write_w!(w, &byts);
                 n + m + byts.len()
             }
             Cbor::Major3(info, text) => {
                 let n = encode_hdr(major, *info, w)?;
                 let m = encode_addnl(err_at!(FailCbor, u64::try_from(text.len()))?, w)?;
-                write!(w, &text);
+                write_w!(w, &text);
                 n + m + text.len()
             }
             Cbor::Major4(info, list) => {
@@ -116,7 +182,7 @@ impl Cbor {
                 n + m
             }
             Cbor::Binary(data) => {
-                write!(w, data);
+                write_w!(w, data);
                 data.len()
             }
         };
@@ -124,7 +190,8 @@ impl Cbor {
         Ok(n)
     }
 
-    /// Deserialize a bytes from reader `r` to Cbor value.
+    /// Deserialize bytes from reader `r` to Cbor value, return the cbor value
+    /// and number of bytes read to construct the value.
     pub fn decode<R>(r: &mut R) -> Result<(Cbor, usize)>
     where
         R: io::Read,
@@ -169,7 +236,7 @@ impl Cbor {
                 let (val, m) = decode_addnl(info, r)?;
                 let len: usize = err_at!(FailConvert, val.try_into())?;
                 let mut data = vec![0; len];
-                read!(r, &mut data);
+                read_r!(r, &mut data);
                 (Cbor::Major2(info, data), m + len)
             }
             (3, Info::Indefinite) => {
@@ -190,7 +257,7 @@ impl Cbor {
                 let (val, m) = decode_addnl(info, r)?;
                 let len: usize = err_at!(FailConvert, val.try_into())?;
                 let mut text = vec![0; len];
-                read!(r, &mut text);
+                read_r!(r, &mut text);
                 (Cbor::Major3(info, text), m + len)
             }
             (4, Info::Indefinite) => {
@@ -270,11 +337,13 @@ impl Cbor {
         }
     }
 
+    /// Convert `val` as Cbor major type-2 value.
     pub fn from_bytes(val: Vec<u8>) -> Result<Self> {
         let n = err_at!(FailConvert, u64::try_from(val.len()))?;
         Ok(Cbor::Major2(n.into(), val))
     }
 
+    /// Convert Cbor major type-2 value as bytes.
     pub fn into_bytes(self) -> Result<Vec<u8>> {
         match self {
             Cbor::Major2(_, val) => Ok(val),
@@ -283,10 +352,10 @@ impl Cbor {
     }
 }
 
-/// 5-bit value for additional info.
-#[derive(Copy, Clone, Eq, PartialEq)]
+/// 5-bit value for additional info. Refer to Cbor specs for details.
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum Info {
-    /// additional info is part of this info.
+    /// additional info is in-lined.
     Tiny(u8), // 0..=23
     /// additional info of 8-bit unsigned integer.
     U8,
@@ -304,6 +373,20 @@ pub enum Info {
     Reserved30,
     /// Indefinite encoding.
     Indefinite,
+}
+
+impl arbitrary::Arbitrary for Info {
+    fn arbitrary(u: &mut Unstructured) -> arbitrary::Result<Self> {
+        let tn = u.arbitrary::<u8>()? % 24;
+        Ok(*u.choose(&[
+            Info::Tiny(tn),
+            Info::U8,
+            Info::U16,
+            Info::U32,
+            Info::U64,
+            Info::Indefinite,
+        ])?)
+    }
 }
 
 impl TryFrom<u8> for Info {
@@ -363,7 +446,7 @@ where
         Info::Reserved30 => 30,
         Info::Indefinite => 31,
     };
-    write!(w, &[(major as u8) << 5 | info]);
+    write_w!(w, &[(major as u8) << 5 | info]);
     Ok(1)
 }
 
@@ -372,7 +455,7 @@ where
     R: io::Read,
 {
     let mut scratch = [0_u8; 8];
-    read!(r, &mut scratch[..1]);
+    read_r!(r, &mut scratch[..1]);
 
     let b = scratch[0];
 
@@ -389,23 +472,23 @@ where
     let n = match num {
         0..=23 => 0,
         n if n <= (u8::MAX as u64) => {
-            scratch.copy_from_slice(&(n as u8).to_be_bytes());
+            scratch[..1].copy_from_slice(&(n as u8).to_be_bytes());
             1
         }
         n if n <= (u16::MAX as u64) => {
-            scratch.copy_from_slice(&(n as u16).to_be_bytes());
+            scratch[..2].copy_from_slice(&(n as u16).to_be_bytes());
             2
         }
         n if n <= (u32::MAX as u64) => {
-            scratch.copy_from_slice(&(n as u32).to_be_bytes());
+            scratch[..4].copy_from_slice(&(n as u32).to_be_bytes());
             4
         }
         n => {
-            scratch.copy_from_slice(&n.to_be_bytes());
+            scratch[..8].copy_from_slice(&n.to_be_bytes());
             8
         }
     };
-    write!(w, &scratch[..n]);
+    write_w!(w, &scratch[..n]);
     Ok(n)
 }
 
@@ -417,28 +500,28 @@ where
     let (num, n) = match info {
         Info::Tiny(num) => (num as u64, 0),
         Info::U8 => {
-            read!(r, &mut scratch[..1]);
+            read_r!(r, &mut scratch[..1]);
             (
                 u8::from_be_bytes(scratch[..1].try_into().unwrap()) as u64,
                 1,
             )
         }
         Info::U16 => {
-            read!(r, &mut scratch[..2]);
+            read_r!(r, &mut scratch[..2]);
             (
                 u16::from_be_bytes(scratch[..2].try_into().unwrap()) as u64,
                 2,
             )
         }
         Info::U32 => {
-            read!(r, &mut scratch[..4]);
+            read_r!(r, &mut scratch[..4]);
             (
                 u32::from_be_bytes(scratch[..4].try_into().unwrap()) as u64,
                 4,
             )
         }
         Info::U64 => {
-            read!(r, &mut scratch[..8]);
+            read_r!(r, &mut scratch[..8]);
             (
                 u64::from_be_bytes(scratch[..8].try_into().unwrap()) as u64,
                 8,
@@ -450,10 +533,10 @@ where
     Ok((num, n))
 }
 
-/// Major type 7, simple-value
-#[derive(Copy, Clone)]
+/// Major type 7, simple-value. Refer to Cbor specs for details.
+#[derive(Debug, Copy, Clone)]
 pub enum SimpleValue {
-    /// 0..=19 and 28..=30 and 32..=255 unassigned
+    /// 0..=19 and 28..=30 and 32..=255 are unassigned.
     Unassigned,
     /// Boolean type, value true.
     True, // 20, tiny simple-value
@@ -475,13 +558,40 @@ pub enum SimpleValue {
     Break, // 31
 }
 
+impl arbitrary::Arbitrary for SimpleValue {
+    fn arbitrary(u: &mut Unstructured) -> arbitrary::Result<Self> {
+        let f4 = u.arbitrary::<f32>()?;
+        let f8 = u.arbitrary::<f64>()?;
+
+        Ok(*u.choose(&[
+            SimpleValue::True,
+            SimpleValue::False,
+            SimpleValue::Null,
+            SimpleValue::F32(f4),
+            SimpleValue::F64(f8),
+        ])?)
+    }
+}
+
 impl Eq for SimpleValue {}
 
 impl PartialEq for SimpleValue {
     fn eq(&self, other: &Self) -> bool {
-        let a = self.to_type_order();
-        let b = other.to_type_order();
-        a == b
+        use SimpleValue::*;
+
+        match (self, other) {
+            (Unassigned, Unassigned) => true,
+            (True, True) => true,
+            (False, False) => true,
+            (Null, Null) => true,
+            (Undefined, Undefined) => true,
+            (Reserved24(a), Reserved24(b)) => a == b,
+            (F16(a), F16(b)) => a == b,
+            (F32(a), F32(b)) => a.total_cmp(b) == cmp::Ordering::Equal,
+            (F64(a), F64(b)) => a.total_cmp(b) == cmp::Ordering::Equal,
+            (Break, Break) => true,
+            (_, _) => false,
+        }
     }
 }
 
@@ -509,7 +619,7 @@ impl TryFrom<SimpleValue> for Cbor {
 }
 
 impl SimpleValue {
-    fn to_type_order(&self) -> usize {
+    pub fn to_type_order(&self) -> usize {
         use SimpleValue::*;
 
         match self {
@@ -540,19 +650,19 @@ impl SimpleValue {
                 1
             }
             F16(f) => {
-                scratch.copy_from_slice(&f.to_be_bytes());
+                scratch[0..2].copy_from_slice(&f.to_be_bytes());
                 2
             }
             F32(f) => {
-                scratch.copy_from_slice(&f.to_be_bytes());
+                scratch[0..4].copy_from_slice(&f.to_be_bytes());
                 4
             }
             F64(f) => {
-                scratch.copy_from_slice(&f.to_be_bytes());
+                scratch[0..8].copy_from_slice(&f.to_be_bytes());
                 8
             }
         };
-        write!(w, &scratch[..n]);
+        write_w!(w, &scratch[..n]);
         Ok(n)
     }
 
@@ -570,12 +680,12 @@ impl SimpleValue {
             Info::U8 => err_at!(FailCbor, msg: "simple-value-unassigned1")?,
             Info::U16 => err_at!(FailCbor, msg: "simple-value-f16")?,
             Info::U32 => {
-                read!(r, &mut scratch[..4]);
+                read_r!(r, &mut scratch[..4]);
                 let val = f32::from_be_bytes(scratch[..4].try_into().unwrap());
                 (SimpleValue::F32(val), 4)
             }
             Info::U64 => {
-                read!(r, &mut scratch[..8]);
+                read_r!(r, &mut scratch[..8]);
                 let val = f64::from_be_bytes(scratch[..8].try_into().unwrap());
                 (SimpleValue::F64(val), 8)
             }
@@ -588,13 +698,15 @@ impl SimpleValue {
     }
 }
 
-/// Major type 6, Tag values.
-#[derive(Clone, Eq, PartialEq)]
+/// Major type 6, Tag values. Refer to Cbor specs for details.
+#[derive(Debug, Clone, Eq, PartialEq, Arbitrary)]
 pub enum Tag {
-    /// Tag 39, used as identifier marker for multiple cbor-type.
+    /// Tag 39, used as identifier marker. This implementation shall
+    /// treat them as literal values. Used by `Cborize` procedural
+    /// macro to match values with types.
     Identifier(Box<Cbor>),
-    /// Don't worry about the type wrapped by the tag-value, just encode
-    /// the tag and leave the subsequent encoding at caller's discretion.
+    /// Catch all tag-value, follows the generic Tag specification
+    /// for Cbor.
     Value(u64),
 }
 
@@ -606,14 +718,17 @@ impl From<Tag> for Cbor {
 }
 
 impl Tag {
+    /// Construct a Tag value from u64 type.
     pub fn from_value(value: u64) -> Tag {
         Tag::Value(value)
     }
 
+    /// Wrap value with Identifier tag.
     pub fn from_identifier(value: Cbor) -> Tag {
         Tag::Identifier(Box::new(value))
     }
 
+    /// Fetch the u64 type value for tag.
     pub fn to_tag_value(&self) -> u64 {
         match self {
             Tag::Identifier(_) => 39,
@@ -651,30 +766,55 @@ impl Tag {
     }
 }
 
-/// Possible types that can be used as key in cbor-map.
-#[derive(Clone)]
+/// Possible types that can be used as a key in cbor-map.
+#[derive(Debug, Clone)]
 pub enum Key {
     Bool(bool),
-    U64(u64),
     N64(i64),
+    U64(u64),
     F32(f32),
     F64(f64),
     Bytes(Vec<u8>),
     Text(String),
 }
 
+impl arbitrary::Arbitrary for Key {
+    fn arbitrary(u: &mut Unstructured) -> arbitrary::Result<Self> {
+        let bl = Key::Bool(u.arbitrary::<bool>()?);
+        let nn = Key::N64(-u.arbitrary::<i64>()?.abs());
+        let pn = Key::U64(u.arbitrary::<u64>()?);
+        let f4 = Key::F32(u.arbitrary::<f32>()?);
+        let f8 = Key::F64(u.arbitrary::<f64>()?);
+        let bs = Key::Bytes(u.arbitrary::<Vec<u8>>()?);
+        let sr = Key::Text(u.arbitrary::<String>()?);
+
+        Ok(u.choose(&[bl, nn, pn, f4, f8, bs, sr])?.clone())
+    }
+}
+
 impl Key {
-    fn to_type_order(&self) -> usize {
+    /// As per cbor spec, map's key can be a heterogenous collection of types.
+    /// That is, some of the keys can be bool, other can be numbers etc ..
+    ///
+    /// This function defines the ordering for supported key types. As,
+    /// * Key::Bool, sort before every other keys.
+    /// * Key::N64, sort after boolean type.
+    /// * Key::U64, sort after negative integers.
+    /// * Key::F32, sort after positive integers.
+    /// * Key::F64, sort after 32-bit floating point numbers.
+    /// * Key::Bytes, sort after 64-bit floating point numbers.
+    /// * Key::Text, sort after bytes.
+    pub fn to_type_order(&self) -> usize {
         use Key::*;
 
         match self {
             Bool(_) => 4,
+            N64(_) => 8,
             U64(_) => 8,
-            N64(_) => 12,
-            F32(_) => 16,
-            F64(_) => 20,
-            Bytes(_) => 24,
-            Text(_) => 28,
+            F32(_) => 12,
+            F64(_) => 16,
+            Bytes(_) => 20,
+            Text(_) => 24,
         }
     }
 }
@@ -683,9 +823,18 @@ impl Eq for Key {}
 
 impl PartialEq for Key {
     fn eq(&self, other: &Self) -> bool {
-        let a = self.to_type_order();
-        let b = other.to_type_order();
-        a == b
+        use Key::*;
+
+        match (self, other) {
+            (Bool(a), Bool(b)) => a == b,
+            (N64(a), N64(b)) => a == b,
+            (U64(a), U64(b)) => a == b,
+            (F32(a), F32(b)) => a.total_cmp(b) == cmp::Ordering::Equal,
+            (F64(a), F64(b)) => a.total_cmp(b) == cmp::Ordering::Equal,
+            (Bytes(a), Bytes(b)) => a == b,
+            (Text(a), Text(b)) => a == b,
+            (_, _) => false,
+        }
     }
 }
 
@@ -696,11 +845,13 @@ impl Ord for Key {
         let (a, b) = (self.to_type_order(), other.to_type_order());
         if a == b {
             match (self, other) {
-                (U64(a), U64(b)) => a.cmp(b),
+                (Bool(a), Bool(b)) => a.cmp(b),
                 (N64(a), N64(b)) => a.cmp(b),
+                (U64(a), U64(b)) => a.cmp(b),
+                (N64(_), U64(_)) => cmp::Ordering::Less,
+                (U64(_), N64(_)) => cmp::Ordering::Greater,
                 (Bytes(a), Bytes(b)) => a.cmp(b),
                 (Text(a), Text(b)) => a.cmp(b),
-                (Bool(a), Bool(b)) => a.cmp(b),
                 (F32(a), F32(b)) => a.total_cmp(b),
                 (F64(a), F64(b)) => a.total_cmp(b),
                 (_, _) => unreachable!(),
@@ -722,8 +873,7 @@ impl IntoCbor for Key {
         let val = match self {
             Key::U64(key) => Cbor::Major0(key.into(), key),
             Key::N64(key) if key >= 0 => {
-                let val = err_at!(FailConvert, u64::try_from(key))?;
-                Cbor::Major0(val.into(), val)
+                err_at!(FailConvert, msg: "Key::N64({}) cannot be positive", key)?
             }
             Key::N64(key) => {
                 let val = err_at!(FailConvert, u64::try_from(key.abs() - 1))?;
@@ -1057,3 +1207,7 @@ where
         }
     }
 }
+
+#[cfg(test)]
+#[path = "cbor_test.rs"]
+mod cbor_test;

@@ -54,9 +54,6 @@ macro_rules! err_at {
 
 pub mod cbor;
 pub mod thread;
-pub mod util;
-
-pub use thread::Thread;
 
 #[doc(hidden)]
 pub use mkit_derive::*;
