@@ -8,6 +8,7 @@ use log::debug;
 
 #[allow(unused_imports)]
 use std::{
+    marker::PhantomData,
     mem,
     sync::{mpsc, Arc},
     thread,
@@ -75,13 +76,13 @@ pub struct Thread<Q, R, T> {
 }
 
 struct Inner<Q, R, T> {
-    tx: Tx<Q, R>,
     handle: thread::JoinHandle<T>,
+    _req: PhantomData<Q>,
+    _res: PhantomData<R>,
 }
 
 impl<Q, R, T> Inner<Q, R, T> {
     fn close_wait(self) -> Result<T> {
-        mem::drop(self.tx); // drop input channel to thread.
         match self.handle.join() {
             Ok(val) => Ok(val),
             Err(err) => err_at!(ThreadFail, msg: "fail {:?}", err),
@@ -106,7 +107,7 @@ impl<Q, R, T> Thread<Q, R, T> {
     /// infinite buffer. `main_loop` shall be called with the rx side
     /// of the channel and shall return a function that can be spawned
     /// using thread::spawn.
-    pub fn new<F, N>(name: &str, main_loop: F) -> Thread<Q, R, T>
+    pub fn new<F, N>(name: &str, main_loop: F) -> (Thread<Q, R, T>, Tx<Q, R>)
     where
         F: 'static + FnOnce(Rx<Q, R>) -> N + Send,
         N: 'static + Send + FnOnce() -> T,
@@ -117,18 +118,25 @@ impl<Q, R, T> Thread<Q, R, T> {
 
         debug!(target: "thread", "{} spawned in async mode", name);
 
-        Thread {
+        let th = Thread {
             name: name.to_string(),
             inner: Some(Inner {
-                tx: Tx::N(tx),
                 handle,
+                _req: PhantomData,
+                _res: PhantomData,
             }),
-        }
+        };
+
+        (th, Tx::N(tx))
     }
 
     /// Create a new Thread instance, using synchronous channel with
     /// finite buffer.
-    pub fn new_sync<F, N>(name: &str, channel_size: usize, main_loop: F) -> Thread<Q, R, T>
+    pub fn new_sync<F, N>(
+        name: &str,
+        channel_size: usize,
+        main_loop: F,
+    ) -> (Thread<Q, R, T>, Tx<Q, R>)
     where
         F: 'static + FnOnce(Rx<Q, R>) -> N + Send,
         N: 'static + Send + FnOnce() -> T,
@@ -139,18 +147,16 @@ impl<Q, R, T> Thread<Q, R, T> {
 
         debug!(target: "thread", "{} spawned in sync mode", name);
 
-        Thread {
+        let th = Thread {
             name: name.to_string(),
             inner: Some(Inner {
-                tx: Tx::S(tx),
                 handle,
+                _req: PhantomData,
+                _res: PhantomData,
             }),
-        }
-    }
+        };
 
-    /// Clone the a IPC sender to communicate with this thread.
-    pub fn clone_tx(&self) -> Tx<Q, R> {
-        self.inner.as_ref().map(|x| x.tx.clone()).unwrap()
+        (th, Tx::S(tx))
     }
 
     /// Recommended way to exit/shutdown the thread. Note that all [Tx]
