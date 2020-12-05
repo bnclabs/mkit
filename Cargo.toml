@@ -2,12 +2,13 @@
 name = "mkit"
 version = "0.1.0"
 description = "Tools and macros for inter-planetary applications"
-repository = "https://github.com/bnclabs/mkit"
 authors = ["prataprc <prataprc@gmail.com>"]
-keywords = ["data", "cbor"]
+documentation = "https://docs.rs/mkit/"
+repository = "https://github.com/bnclabs/mkit"
+keywords = ["cbor", "multithreading"]
+categories = ["cbor", "multithreading"]
 license = "MIT"
 readme = "README.md"
-documentation = "https://docs.rs/mkit/"
 edition = "2018"
 
 [dependencies]
