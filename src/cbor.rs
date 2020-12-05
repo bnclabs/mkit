@@ -27,7 +27,7 @@ pub trait IntoCbor {
     fn into_cbor(self) -> Result<Cbor>;
 }
 
-/// Conver a from Cbor, the cbor value is typically obtained by
+/// Convert a from Cbor, the cbor value is typically obtained by
 /// decoding it from bytes.
 pub trait FromCbor: Sized {
     fn from_cbor(val: Cbor) -> Result<Self>;
@@ -549,7 +549,7 @@ pub enum SimpleValue {
     Null, // 22, tiny simple-value
     /// Undefined unitary type.
     Undefined, // 23, tiny simple-value
-    /// Reserver.
+    /// Reserved.
     Reserved24(u8), // 24, one-byte simple-value
     /// 16-bit floating point.
     F16(u16), // 25, not-implemented
@@ -798,7 +798,7 @@ impl arbitrary::Arbitrary for Key {
 }
 
 impl Key {
-    /// As per cbor [spec], map's key can be a heterogenous collection of types.
+    /// As per cbor [spec], map's key can be a heterogeneous collection of types.
     /// That is, some of the keys can be bool, other can be numbers etc ..
     ///
     /// This function defines the ordering for supported key types. As,

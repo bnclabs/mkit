@@ -63,7 +63,7 @@ pub type Rx<Q, R> = mpsc::Receiver<(Q, Option<mpsc::Sender<R>>)>;
 /// Thread type, providing gen-server pattern to do multi-threading.
 ///
 /// When a thread value is dropped, it is made sure that there are
-/// no dangling thread routines. To acheive this following requirements
+/// no dangling thread routines. To achieve this following requirements
 /// need to be satisfied:
 ///
 /// * The thread's main loop should handle _disconnect_ signal on its
