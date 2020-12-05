@@ -91,11 +91,8 @@ impl<Q, R, T> Inner<Q, R, T> {
 
 impl<Q, R, T> Drop for Thread<Q, R, T> {
     fn drop(&mut self) {
-        match self.inner.take() {
-            Some(inner) => {
-                inner.close_wait().ok();
-            }
-            None => (),
+        if let Some(inner) = self.inner.take() {
+            inner.close_wait().ok();
         }
         debug!(target: "thread", "dropped thread `{}`", self.name);
     }

@@ -3,6 +3,7 @@
 
 #![feature(min_const_generics)]
 #![feature(total_cmp)]
+#![allow(clippy::many_single_char_names)]
 
 use std::{error, fmt, result};
 
