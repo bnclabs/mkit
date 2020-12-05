@@ -22,14 +22,13 @@ macro_rules! write_w {
     };
 }
 
-/// Convert the implementing type to Cbor, which can then be encoded into
-/// bytes.
+/// Convert a type to Cbor, which can then be encoded into bytes.
 pub trait IntoCbor {
     fn into_cbor(self) -> Result<Cbor>;
 }
 
-/// Conver the implementing type from Cbor, the cbor value would have been
-/// obtained after decoding.
+/// Conver a from Cbor, the cbor value is typically obtained by
+/// decoding it from bytes.
 pub trait FromCbor: Sized {
     fn from_cbor(val: Cbor) -> Result<Self>;
 }
@@ -37,7 +36,7 @@ pub trait FromCbor: Sized {
 /// Recursion limit for nested Cbor objects.
 pub const RECURSION_LIMIT: u32 = 1000;
 
-/// Cbor enumerated over its major types.
+/// Cbor type enumerated over its major variants.
 ///
 /// Use one of the conversion trait to convert language-native-type to a
 /// Cbor variant. For lazy decoding, use [Cbor::Binary] variant.
@@ -352,7 +351,9 @@ impl Cbor {
     }
 }
 
-/// 5-bit value for additional info. Refer to Cbor specs for details.
+/// 5-bit value for additional info. Refer to Cbor [spec] for details.
+///
+/// [spec]: https://tools.ietf.org/html/rfc7049
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum Info {
     /// additional info is in-lined.
@@ -533,7 +534,9 @@ where
     Ok((num, n))
 }
 
-/// Major type 7, simple-value. Refer to Cbor specs for details.
+/// Major type 7, simple-value. Refer to Cbor [spec] for details.
+///
+/// [spec]: https://tools.ietf.org/html/rfc7049
 #[derive(Debug, Copy, Clone)]
 pub enum SimpleValue {
     /// 0..=19 and 28..=30 and 32..=255 are unassigned.
@@ -698,7 +701,9 @@ impl SimpleValue {
     }
 }
 
-/// Major type 6, Tag values. Refer to Cbor specs for details.
+/// Major type 6, Tag values. Refer to Cbor [spec] for details.
+///
+/// [spec]: https://tools.ietf.org/html/rfc7049
 #[derive(Debug, Clone, Eq, PartialEq, Arbitrary)]
 pub enum Tag {
     /// Tag 39, used as identifier marker. This implementation shall
@@ -793,7 +798,7 @@ impl arbitrary::Arbitrary for Key {
 }
 
 impl Key {
-    /// As per cbor spec, map's key can be a heterogenous collection of types.
+    /// As per cbor [spec], map's key can be a heterogenous collection of types.
     /// That is, some of the keys can be bool, other can be numbers etc ..
     ///
     /// This function defines the ordering for supported key types. As,
@@ -804,6 +809,8 @@ impl Key {
     /// * Key::F64, sort after 32-bit floating point numbers.
     /// * Key::Bytes, sort after 64-bit floating point numbers.
     /// * Key::Text, sort after bytes.
+    ///
+    /// [spec]: https://tools.ietf.org/html/rfc7049
     pub fn to_type_order(&self) -> usize {
         use Key::*;
 
