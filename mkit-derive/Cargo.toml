@@ -6,8 +6,8 @@ authors = ["prataprc <prataprc@gmail.com>"]
 description = "Macros for distributed peer-to-peer applications"
 documentation = "https://docs.rs/mkit"
 repository = "https://github.com/bnclabs/mkit"
-keywords = ["data", "macro", "cbor"]
-categories = ["data"]
+keywords = ["macro", "cbor"]
+categories = ["macro", "cbor"]
 license = "MIT"
 
 [dependencies]
