@@ -16,7 +16,8 @@ Contribution
   * Run `cargo test` to make sure all test cases are passing.
   * Run `cargo bench` to make sure all benchmark cases are passing.
   * Run `cargo +nightly clippy --all-targets --all-features` to fix clippy issues.
-  * [Install] and run `cargo spellcheck` to remove common spelling mistakes.
+  * [Install][spellcheck] and run `cargo spellcheck` to remove common spelling mistakes.
 * [Developer certificate of origin][dco] is preferred.
 
 [spellcheck]: https://github.com/drahnr/cargo-spellcheck
+[dco]: https://developercertificate.org/
