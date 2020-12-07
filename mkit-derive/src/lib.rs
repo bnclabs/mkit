@@ -43,7 +43,7 @@ fn impl_cborize_struct(input: &DeriveInput) -> TokenStream {
 fn from_struct_to_cbor(name: &Ident, generics: &Generics, fields: &Fields) -> TokenStream {
     let preamble = quote! {
         let val: ::mkit::cbor::Cbor = {
-            let id = #name#generics::ID.into_cbor()?;
+            let id = #name::#generics::ID.into_cbor()?;
             ::mkit::cbor::Tag::from_identifier(id).into()
         };
         items.push(val);
@@ -97,7 +97,7 @@ fn from_cbor_to_struct(name: &Ident, generics: &Generics, fields: &Fields) -> To
         }
         let data_id = items.remove(0);
         let type_id: ::mkit::cbor::Cbor = {
-            let id = #name#generics::ID.into_cbor()?;
+            let id = #name::#generics::ID.into_cbor()?;
             ::mkit::cbor::Tag::from_identifier(id).into()
         };
         if data_id != type_id {
@@ -163,7 +163,7 @@ fn impl_cborize_enum(input: &DeriveInput) -> TokenStream {
 fn from_enum_to_cbor(name: &Ident, generics: &Generics, variants: &[&Variant]) -> TokenStream {
     let preamble = quote! {
         let val: ::mkit::cbor::Cbor = {
-            let id = #name#generics::ID.into_cbor()?;
+            let id = #name::#generics::ID.into_cbor()?;
             ::mkit::cbor::Tag::from_identifier(id).into()
         };
         items.push(val);
@@ -236,7 +236,7 @@ fn from_cbor_to_enum(name: &Ident, generics: &Generics, variants: &[&Variant]) -
         }
         let data_id = items.remove(0);
         let type_id: ::mkit::cbor::Cbor= {
-            let id = #name#generics::ID.into_cbor()?;
+            let id = #name::#generics::ID.into_cbor()?;
             ::mkit::cbor::Tag::from_identifier(id).into()
         }
         if data_id != type_id {
