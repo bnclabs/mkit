@@ -55,9 +55,11 @@ macro_rules! err_at {
 
 pub mod cbor;
 pub mod thread;
+pub mod traits;
 
 #[doc(hidden)]
 pub use mkit_derive::*;
+pub use traits::{Diff, Footprint};
 
 /// Error variants that can be returned by this package's API.
 ///
