@@ -4,13 +4,13 @@ use lazy_static::lazy_static;
 use proc_macro2::TokenStream;
 use proc_macro_error::{abort_call_site, proc_macro_error};
 use quote::quote;
-use syn::*;
+use syn::{spanned::Spanned, *};
 
 mod ty;
 
 lazy_static! {
     pub(crate) static ref UNNAMED_FIELDS: Vec<&'static str> =
-        vec!["a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l",];
+        vec!["a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l"];
 }
 
 #[proc_macro_derive(Cborize, attributes(cbor))]
@@ -41,9 +41,10 @@ fn impl_cborize_struct(input: &DeriveInput) -> TokenStream {
 }
 
 fn from_struct_to_cbor(name: &Ident, generics: &Generics, fields: &Fields) -> TokenStream {
+    let id_declr = let_id(name, generics);
     let preamble = quote! {
         let val: ::mkit::cbor::Cbor = {
-            let id = #name::#generics::ID.into_cbor()?;
+            #id_declr;
             ::mkit::cbor::Tag::from_identifier(id).into()
         };
         items.push(val);
@@ -90,6 +91,7 @@ fn from_cbor_to_struct(name: &Ident, generics: &Generics, fields: &Fields) -> To
         Fields::Unnamed(_) => abort_call_site!("unnamed struct not supported for Cborize {}", name),
     };
 
+    let id_declr = let_id(name, generics);
     let preamble = quote! {
         // validate the cbor msg for this type.
         if items.len() == 0 {
@@ -97,7 +99,7 @@ fn from_cbor_to_struct(name: &Ident, generics: &Generics, fields: &Fields) -> To
         }
         let data_id = items.remove(0);
         let type_id: ::mkit::cbor::Cbor = {
-            let id = #name::#generics::ID.into_cbor()?;
+            #id_declr;
             ::mkit::cbor::Tag::from_identifier(id).into()
         };
         if data_id != type_id {
@@ -161,9 +163,10 @@ fn impl_cborize_enum(input: &DeriveInput) -> TokenStream {
 }
 
 fn from_enum_to_cbor(name: &Ident, generics: &Generics, variants: &[&Variant]) -> TokenStream {
+    let id_declr = let_id(name, generics);
     let preamble = quote! {
         let val: ::mkit::cbor::Cbor = {
-            let id = #name::#generics::ID.into_cbor()?;
+            #id_declr;
             ::mkit::cbor::Tag::from_identifier(id).into()
         };
         items.push(val);
@@ -172,15 +175,16 @@ fn from_enum_to_cbor(name: &Ident, generics: &Generics, variants: &[&Variant]) -
     let mut tok_variants: TokenStream = TokenStream::new();
     for variant in variants.iter() {
         let variant_name = &variant.ident;
+        let variant_lit = variant.ident.to_string();
         let arm = match &variant.fields {
             Fields::Unit => {
-                quote! { #name::#variant_name => #variant_name.into_cbor()? }
+                quote! { #name::#variant_name => #variant_lit.into_cbor()? }
             }
             Fields::Named(fields) => {
                 let (params, body) = named_var_fields_to_cbor(fields);
                 quote! {
                     #name::#variant_name(#params) => {
-                        #variant_name.into_cbor()?;
+                        items.push(#variant_lit.into_cbor()?);
                         #body
                     },
                 }
@@ -189,7 +193,7 @@ fn from_enum_to_cbor(name: &Ident, generics: &Generics, variants: &[&Variant]) -
                 let (params, body) = unnamed_fields_to_cbor(fields);
                 quote! {
                     #name::#variant_name(#params) => {
-                        #variant_name.into_cbor()?;
+                        items.push(#variant_lit.into_cbor()?);
                         #body
                     },
                 }
@@ -229,6 +233,7 @@ fn from_enum_to_cbor(name: &Ident, generics: &Generics, variants: &[&Variant]) -
 
 fn from_cbor_to_enum(name: &Ident, generics: &Generics, variants: &[&Variant]) -> TokenStream {
     let name_lit = name.to_string();
+    let id_declr = let_id(name, generics);
     let preamble = quote! {
         // validate the cbor msg for this type.
         if items.len() < 2 {
@@ -236,9 +241,9 @@ fn from_cbor_to_enum(name: &Ident, generics: &Generics, variants: &[&Variant]) -
         }
         let data_id = items.remove(0);
         let type_id: ::mkit::cbor::Cbor= {
-            let id = #name::#generics::ID.into_cbor()?;
+            #id_declr;
             ::mkit::cbor::Tag::from_identifier(id).into()
-        }
+        };
         if data_id != type_id {
             err_at!(FailConvert, msg: "bad {}", #name_lit)?
         }
@@ -248,12 +253,12 @@ fn from_cbor_to_enum(name: &Ident, generics: &Generics, variants: &[&Variant]) -
 
     let mut check_variants: TokenStream = TokenStream::new();
     for variant in variants.iter() {
-        let variant_name = &variant.ident;
+        let variant_lit = &variant.ident.to_string();
         let arm = match &variant.fields {
             Fields::Named(fields) => {
                 let n_fields = fields.named.len();
                 quote! {
-                    #variant_name => {
+                   #variant_lit => {
                         if #n_fields != items.len() {
                             err_at!(FailConvert, msg: "bad arity {} {}", #n_fields, items.len())?;
                         }
@@ -263,14 +268,22 @@ fn from_cbor_to_enum(name: &Ident, generics: &Generics, variants: &[&Variant]) -
             Fields::Unnamed(fields) => {
                 let n_fields = fields.unnamed.len();
                 quote! {
-                    #variant_name => {
+                    #variant_lit => {
                         if #n_fields != items.len() {
                             err_at!(FailConvert, msg: "bad arity {} {}", #n_fields, items.len())?;
                         }
                     }
                 }
             }
-            Fields::Unit => abort_call_site!("unit struct not supported for Cborize {}", name),
+            Fields::Unit => {
+                quote! {
+                    #variant_lit => {
+                        if items.len() > 0 {
+                            err_at!(FailConvert, msg: "bad arity {}", items.len())?;
+                        }
+                    }
+                }
+            }
         };
         check_variants.extend(arm)
     }
@@ -278,18 +291,21 @@ fn from_cbor_to_enum(name: &Ident, generics: &Generics, variants: &[&Variant]) -
     let mut tok_variants: TokenStream = TokenStream::new();
     for variant in variants.iter() {
         let variant_name = &variant.ident;
+        let variant_lit = &variant.ident.to_string();
         let arm = match &variant.fields {
-            Fields::Unit => quote! { #variant_name => #name::#variant_name },
+            Fields::Unit => quote! {
+                #variant_lit => #name::#variant_name
+            },
             Fields::Named(fields) => {
-                let body = cbor_to_named_var_fields(fields);
-                quote! { #variant_name => #name::#variant_name { #body }, }
+                let (_, body) = cbor_to_named_var_fields(fields);
+                quote! { #variant_lit => #name::#variant_name { #body }, }
             }
             Fields::Unnamed(fields) => {
-                let body = cbor_to_unnamed_fields(fields);
-                quote! { #variant_name => #name::#variant_name(#body) }
+                let (_, body) = cbor_to_unnamed_fields(fields);
+                quote! { #variant_lit => #name::#variant_name(#body), }
             }
         };
-        tok_variants.extend(arm)
+        tok_variants.extend(arm);
     }
 
     let mut where_clause = match &generics.where_clause {
@@ -311,11 +327,17 @@ fn from_cbor_to_enum(name: &Ident, generics: &Generics, variants: &[&Variant]) -
                 let mut items =  Vec::<::mkit::cbor::Cbor>::from_cbor(value)?;
 
                 #preamble
-                #check_variants
 
-                match variant_name {
-                    #tok_variants
+                match variant_name.as_str() {
+                    #check_variants
+                    _ => unreachable!(),
                 }
+
+                let val = match variant_name.as_str() {
+                    #tok_variants
+                    _ => unreachable!(),
+                };
+                Ok(val)
             }
         }
     }
@@ -365,6 +387,7 @@ fn unnamed_fields_to_cbor(fields: &FieldsUnnamed) -> (TokenStream, TokenStream) 
     let mut params = TokenStream::new();
     let mut body = TokenStream::new();
     for (field_name, field) in UNNAMED_FIELDS.iter().zip(fields.unnamed.iter()) {
+        let field_name = Ident::new(field_name, field.span());
         let is_bytes = is_bytes_ty(&field.ty);
 
         params.extend(quote! { #field_name, });
@@ -403,41 +426,54 @@ fn cbor_to_named_fields(fields: &FieldsNamed) -> TokenStream {
     tokens
 }
 
-fn cbor_to_named_var_fields(fields: &FieldsNamed) -> TokenStream {
-    let mut tokens = TokenStream::new();
+fn cbor_to_named_var_fields(fields: &FieldsNamed) -> (TokenStream, TokenStream) {
+    let mut params = TokenStream::new();
+    let mut body = TokenStream::new();
     for field in fields.named.iter() {
         let is_bytes = is_bytes_ty(&field.ty);
 
         let field_name = field.ident.as_ref().unwrap();
+        params.extend(quote! { #field_name, });
+
         let ty = &field.ty;
         if is_bytes {
-            tokens.extend(quote! {
+            body.extend(quote! {
                 #field_name: items.remove(0).into_bytes()?,
             });
         } else {
-            tokens.extend(quote! {
+            body.extend(quote! {
                 #field_name: <#ty as ::mkit::cbor::FromCbor>::from_cbor(items.remove(0))?,
             });
         }
     }
-    tokens
+    (params, body)
 }
 
-fn cbor_to_unnamed_fields(fields: &FieldsUnnamed) -> TokenStream {
-    let mut tokens = TokenStream::new();
-    for field in fields.unnamed.iter() {
+fn cbor_to_unnamed_fields(fields: &FieldsUnnamed) -> (TokenStream, TokenStream) {
+    let mut params = TokenStream::new();
+    let mut body = TokenStream::new();
+    for (field_name, field) in UNNAMED_FIELDS.iter().zip(fields.unnamed.iter()) {
+        let field_name = Ident::new(field_name, field.span());
         let is_bytes = is_bytes_ty(&field.ty);
+
+        params.extend(quote! { #field_name, });
 
         let ty = &field.ty;
         if is_bytes {
-            tokens.extend(quote! { items.remove(0).into_bytes()?, });
+            body.extend(quote! { items.remove(0).into_bytes()?, });
         } else {
-            tokens.extend(quote! {
-                <#ty as ::mkit::cbor::FromCbor>::from_cbor(items.remove(0))?,
-            });
+            body.extend(quote! { <#ty as ::mkit::cbor::FromCbor>::from_cbor(items.remove(0))?, });
         }
     }
-    tokens
+    (params, body)
+}
+
+fn let_id(name: &Ident, generics: &Generics) -> TokenStream {
+    if generics.params.is_empty() {
+        quote! { let id = #name::ID.into_cbor()? }
+    } else {
+        quote! { let id = #name::#generics::ID.into_cbor()? }
+    }
 }
 
 fn is_bytes_ty(ty: &syn::Type) -> bool {
