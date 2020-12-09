@@ -59,7 +59,7 @@ pub mod traits;
 
 #[doc(hidden)]
 pub use mkit_derive::*;
-pub use traits::{Diff, Footprint};
+pub use traits::{Diff, Entry, Footprint};
 
 /// Error variants that can be returned by this package's API.
 ///

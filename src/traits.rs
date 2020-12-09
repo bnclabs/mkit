@@ -33,3 +33,5 @@ pub trait Diff: Sized + From<<Self as Diff>::D> {
 pub trait Footprint {
     fn footprint(&self) -> usize;
 }
+
+pub trait Entry {}
