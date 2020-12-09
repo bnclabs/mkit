@@ -183,7 +183,7 @@ fn from_enum_to_cbor(name: &Ident, generics: &Generics, variants: &[&Variant]) -
             Fields::Named(fields) => {
                 let (params, body) = named_var_fields_to_cbor(fields);
                 quote! {
-                    #name::#variant_name(#params) => {
+                    #name::#variant_name{#params} => {
                         items.push(#variant_lit.into_cbor()?);
                         #body
                     },
