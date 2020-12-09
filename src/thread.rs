@@ -81,7 +81,7 @@ struct Inner<Q, R, T> {
 }
 
 impl<Q, R, T> Inner<Q, R, T> {
-    fn close_wait(self) -> Result<T> {
+    fn join(self) -> Result<T> {
         match self.handle.join() {
             Ok(val) => Ok(val),
             Err(err) => err_at!(ThreadFail, msg: "fail {:?}", err),
@@ -92,7 +92,7 @@ impl<Q, R, T> Inner<Q, R, T> {
 impl<Q, R, T> Drop for Thread<Q, R, T> {
     fn drop(&mut self) {
         if let Some(inner) = self.inner.take() {
-            inner.close_wait().ok();
+            inner.join().ok();
         }
         debug!(target: "thread", "dropped thread `{}`", self.name);
     }
@@ -161,7 +161,7 @@ impl<Q, R, T> Thread<Q, R, T> {
     /// Even otherwise, when Thread value goes out of scope its drop
     /// implementation shall call this method to exit the thread, except
     /// that any errors are ignored.
-    pub fn close_wait(mut self) -> Result<T> {
-        self.inner.take().unwrap().close_wait()
+    pub fn join(mut self) -> Result<T> {
+        self.inner.take().unwrap().join()
     }
 }
