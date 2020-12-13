@@ -40,6 +40,10 @@ pub trait Footprint {
 
 pub trait Entry<K, V> {
     fn as_key(&self) -> &K;
+
+    fn is_deleted(&self) -> bool;
+
+    fn to_seqno(&self) -> u64;
 }
 
 /// Trait to build and manage keys in a bitmapped Bloom-filter.
