@@ -347,7 +347,7 @@ fn from_cbor_to_enum(
     quote! {
         impl#generics ::mkit::cbor::FromCbor for #name#generics #where_clause {
             fn from_cbor(value: ::mkit::cbor::Cbor) -> ::mkit::Result<#name#generics> {
-                use ::mkit::Error;
+                use ::mkit::{cbor::IntoCbor, Error};
 
                 let mut items =  Vec::<::mkit::cbor::Cbor>::from_cbor(value)?;
 
@@ -399,7 +399,7 @@ fn named_var_fields_to_cbor(
 
         match &field.ident {
             Some(field_name) if is_bytes => body.extend(quote! {
-                items.push(mkit::cbor::Cbor::from_bytes(#field_name));
+                items.push(mkit::cbor::Cbor::from_bytes(#field_name)?);
             }),
             Some(field_name) => body.extend(quote! {
                 items.push(#field_name.into_cbor()?);
@@ -424,7 +424,7 @@ fn unnamed_fields_to_cbor(
 
         if is_bytes {
             body.extend(quote! {
-                items.push(::mkit::cbor::Cbor::from_bytes(#field_name));
+                items.push(::mkit::cbor::Cbor::from_bytes(#field_name)?);
             });
         } else {
             body.extend(quote! {
