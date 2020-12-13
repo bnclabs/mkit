@@ -2,13 +2,17 @@
 
 use arbitrary::{self, Arbitrary, Unstructured};
 
+use crate::{Error, Result};
+
+#[cfg(unix)]
+use std::os::unix::ffi::OsStringExt;
+#[cfg(windows)]
+use std::os::windows::ffi::OsStringExt;
 use std::{
     cmp,
     convert::{TryFrom, TryInto},
-    io,
+    ffi, io,
 };
-
-use crate::{Error, Result};
 
 macro_rules! read_r {
     ($r:ident, $buf:expr) => {
@@ -1191,6 +1195,22 @@ impl FromCbor for String {
             Cbor::Major3(_, val) => {
                 Ok(err_at!(FailConvert, from_utf8(&val))?.to_string())
             }
+            _ => err_at!(FailConvert, msg: "not utf8-string"),
+        }
+    }
+}
+
+impl IntoCbor for ffi::OsString {
+    fn into_cbor(self) -> Result<Cbor> {
+        let n = err_at!(FailConvert, u64::try_from(self.len()))?;
+        Ok(Cbor::Major3(n.into(), self.into_vec()))
+    }
+}
+
+impl FromCbor for ffi::OsString {
+    fn from_cbor(val: Cbor) -> Result<ffi::OsString> {
+        match val {
+            Cbor::Major3(_, val) => Ok(ffi::OsString::from_vec(val)),
             _ => err_at!(FailConvert, msg: "not utf8-string"),
         }
     }
