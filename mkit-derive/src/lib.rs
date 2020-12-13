@@ -40,7 +40,11 @@ fn impl_cborize_struct(input: &DeriveInput) -> TokenStream {
     }
 }
 
-fn from_struct_to_cbor(name: &Ident, generics: &Generics, fields: &Fields) -> TokenStream {
+fn from_struct_to_cbor(
+    name: &Ident,
+    generics: &Generics,
+    fields: &Fields,
+) -> TokenStream {
     let id_declr = let_id(name, generics);
     let preamble = quote! {
         let val: ::mkit::cbor::Cbor = {
@@ -53,7 +57,10 @@ fn from_struct_to_cbor(name: &Ident, generics: &Generics, fields: &Fields) -> To
     let token_fields = match fields {
         Fields::Unit => quote! {},
         Fields::Named(fields) => named_fields_to_cbor(fields),
-        Fields::Unnamed(_) => abort_call_site!("unnamed struct not supported for Cborize {}", name),
+        Fields::Unnamed(_) => abort_call_site!(
+            "unnamed struct not supported for Cborize {}",
+            name
+        ),
     };
 
     let mut where_clause = match &generics.where_clause {
@@ -83,12 +90,19 @@ fn from_struct_to_cbor(name: &Ident, generics: &Generics, fields: &Fields) -> To
     }
 }
 
-fn from_cbor_to_struct(name: &Ident, generics: &Generics, fields: &Fields) -> TokenStream {
+fn from_cbor_to_struct(
+    name: &Ident,
+    generics: &Generics,
+    fields: &Fields,
+) -> TokenStream {
     let name_lit = name.to_string();
     let n_fields = match fields {
         Fields::Unit => 0,
         Fields::Named(fields) => fields.named.len(),
-        Fields::Unnamed(_) => abort_call_site!("unnamed struct not supported for Cborize {}", name),
+        Fields::Unnamed(_) => abort_call_site!(
+            "unnamed struct not supported for Cborize {}",
+            name
+        ),
     };
 
     let id_declr = let_id(name, generics);
@@ -116,7 +130,10 @@ fn from_cbor_to_struct(name: &Ident, generics: &Generics, fields: &Fields) -> To
             let token_fields = cbor_to_named_fields(fields);
             quote! { { #token_fields } }
         }
-        Fields::Unnamed(_) => abort_call_site!("unnamed struct not supported for Cborize {}", name),
+        Fields::Unnamed(_) => abort_call_site!(
+            "unnamed struct not supported for Cborize {}",
+            name
+        ),
     };
 
     let mut where_clause = match &generics.where_clause {
@@ -162,7 +179,11 @@ fn impl_cborize_enum(input: &DeriveInput) -> TokenStream {
     }
 }
 
-fn from_enum_to_cbor(name: &Ident, generics: &Generics, variants: &[&Variant]) -> TokenStream {
+fn from_enum_to_cbor(
+    name: &Ident,
+    generics: &Generics,
+    variants: &[&Variant],
+) -> TokenStream {
     let id_declr = let_id(name, generics);
     let preamble = quote! {
         let val: ::mkit::cbor::Cbor = {
@@ -231,7 +252,11 @@ fn from_enum_to_cbor(name: &Ident, generics: &Generics, variants: &[&Variant]) -
     }
 }
 
-fn from_cbor_to_enum(name: &Ident, generics: &Generics, variants: &[&Variant]) -> TokenStream {
+fn from_cbor_to_enum(
+    name: &Ident,
+    generics: &Generics,
+    variants: &[&Variant],
+) -> TokenStream {
     let name_lit = name.to_string();
     let id_declr = let_id(name, generics);
     let preamble = quote! {
@@ -361,7 +386,9 @@ fn named_fields_to_cbor(fields: &FieldsNamed) -> TokenStream {
     tokens
 }
 
-fn named_var_fields_to_cbor(fields: &FieldsNamed) -> (TokenStream, TokenStream) {
+fn named_var_fields_to_cbor(
+    fields: &FieldsNamed,
+) -> (TokenStream, TokenStream) {
     let mut params = TokenStream::new();
     let mut body = TokenStream::new();
     for field in fields.named.iter() {
@@ -383,10 +410,13 @@ fn named_var_fields_to_cbor(fields: &FieldsNamed) -> (TokenStream, TokenStream) 
     (params, body)
 }
 
-fn unnamed_fields_to_cbor(fields: &FieldsUnnamed) -> (TokenStream, TokenStream) {
+fn unnamed_fields_to_cbor(
+    fields: &FieldsUnnamed,
+) -> (TokenStream, TokenStream) {
     let mut params = TokenStream::new();
     let mut body = TokenStream::new();
-    for (field_name, field) in UNNAMED_FIELDS.iter().zip(fields.unnamed.iter()) {
+    for (field_name, field) in UNNAMED_FIELDS.iter().zip(fields.unnamed.iter())
+    {
         let field_name = Ident::new(field_name, field.span());
         let is_bytes = is_bytes_ty(&field.ty);
 
@@ -426,7 +456,9 @@ fn cbor_to_named_fields(fields: &FieldsNamed) -> TokenStream {
     tokens
 }
 
-fn cbor_to_named_var_fields(fields: &FieldsNamed) -> (TokenStream, TokenStream) {
+fn cbor_to_named_var_fields(
+    fields: &FieldsNamed,
+) -> (TokenStream, TokenStream) {
     let mut params = TokenStream::new();
     let mut body = TokenStream::new();
     for field in fields.named.iter() {
@@ -449,10 +481,13 @@ fn cbor_to_named_var_fields(fields: &FieldsNamed) -> (TokenStream, TokenStream) 
     (params, body)
 }
 
-fn cbor_to_unnamed_fields(fields: &FieldsUnnamed) -> (TokenStream, TokenStream) {
+fn cbor_to_unnamed_fields(
+    fields: &FieldsUnnamed,
+) -> (TokenStream, TokenStream) {
     let mut params = TokenStream::new();
     let mut body = TokenStream::new();
-    for (field_name, field) in UNNAMED_FIELDS.iter().zip(fields.unnamed.iter()) {
+    for (field_name, field) in UNNAMED_FIELDS.iter().zip(fields.unnamed.iter())
+    {
         let field_name = Ident::new(field_name, field.span());
         let is_bytes = is_bytes_ty(&field.ty);
 
