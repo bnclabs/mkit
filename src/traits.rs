@@ -35,15 +35,7 @@ pub trait Diff: Sized + From<<Self as Diff>::D> {
 /// Trait that can give an approximate memory or disk footprint for
 /// values of a given type.
 pub trait Footprint {
-    fn footprint(&self) -> usize;
-}
-
-pub trait Entry<K, V> {
-    fn as_key(&self) -> &K;
-
-    fn is_deleted(&self) -> bool;
-
-    fn to_seqno(&self) -> u64;
+    fn footprint(&self) -> Result<usize>;
 }
 
 /// Trait to build and manage keys in a bitmapped Bloom-filter.
