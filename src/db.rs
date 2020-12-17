@@ -1,27 +1,57 @@
 use std::ops::Bound;
 
+use crate::{
+    cbor::{FromCbor, IntoCbor},
+    Diff, LocalCborize,
+};
+
+const ENTRY_VER: u32 = 0x0001;
+const VALUE_VER: u32 = 0x0001;
+const DELTA_VER: u32 = 0x0001;
+
+#[derive(Clone, LocalCborize)]
 pub struct Entry<K, V>
 where
     V: crate::Diff,
+    <V as Diff>::D: IntoCbor + FromCbor,
 {
     pub key: K,
     pub value: Value<V>,
     pub deltas: Vec<Delta<<V as crate::Diff>::D>>,
 }
 
+impl<K, V> Entry<K, V>
+where
+    V: crate::Diff,
+    <V as Diff>::D: IntoCbor + FromCbor,
+{
+    pub const ID: u32 = ENTRY_VER;
+}
+
+#[derive(Clone, LocalCborize)]
 pub enum Value<V> {
     U { value: V, seqno: u64 },
     D { seqno: u64 },
 }
 
+impl<V> Value<V> {
+    pub const ID: u32 = VALUE_VER;
+}
+
+#[derive(Clone, LocalCborize)]
 pub enum Delta<D> {
     U { delta: D, seqno: u64 },
     D { seqno: u64 },
 }
 
+impl<D> Delta<D> {
+    pub const ID: u32 = DELTA_VER;
+}
+
 impl<K, V> Entry<K, V>
 where
     V: crate::Diff,
+    <V as Diff>::D: IntoCbor + FromCbor,
 {
     pub fn to_seqno(&self) -> u64 {
         match self.value {

@@ -59,7 +59,8 @@ pub mod thread;
 pub mod traits;
 
 #[doc(hidden)]
-pub use mkit_derive::*;
+pub use mkit_derive::Cborize;
+use mkit_derive::LocalCborize;
 
 pub use db::{Cutoff, Entry};
 pub use traits::{Diff, Footprint};
