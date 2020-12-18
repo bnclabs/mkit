@@ -576,7 +576,7 @@ pub enum SimpleValue {
     /// 32-bit floating point.
     F32(f32), // 26, single-precision float
     /// 64-bit floating point.
-    F64(f64), // 27, single-precision float
+    F64(f64), // 27, double-precision float
     /// Break stop for indefinite encoding.
     Break, // 31
 }
@@ -636,7 +636,7 @@ impl TryFrom<SimpleValue> for Cbor {
             F16(_) => err_at!(FailConvert, msg: "simple-value-f16")?,
             F32(_) => Cbor::Major7(Info::U32, sval),
             F64(_) => Cbor::Major7(Info::U64, sval),
-            Break => err_at!(FailConvert, msg: "simple-value-break")?,
+            Break => Cbor::Major7(Info::Indefinite, sval),
         };
 
         Ok(val)
