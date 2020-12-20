@@ -1,4 +1,4 @@
-use std::ops::Bound;
+use std::{borrow::Borrow, ops::Bound};
 
 use crate::LocalCborize;
 
@@ -38,6 +38,13 @@ pub enum Delta<D> {
 
 impl<D> Delta<D> {
     pub const ID: u32 = DELTA_VER;
+
+    pub fn to_seqno(&self) -> u64 {
+        match self {
+            Delta::U { seqno, .. } => *seqno,
+            Delta::D { seqno } => *seqno,
+        }
+    }
 }
 
 impl<K, V, D> Entry<K, V, D> {
@@ -46,6 +53,20 @@ impl<K, V, D> Entry<K, V, D> {
             Value::U { seqno, .. } => seqno,
             Value::D { seqno } => seqno,
         }
+    }
+
+    pub fn to_key(&self) -> K
+    where
+        K: Clone,
+    {
+        self.key.clone()
+    }
+
+    pub fn borrow_key<Q>(&self) -> &Q
+    where
+        K: Borrow<Q>,
+    {
+        self.key.borrow()
     }
 
     pub fn is_deleted(&self) -> bool {
