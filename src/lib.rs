@@ -62,7 +62,6 @@ pub mod traits;
 pub use mkit_derive::Cborize;
 use mkit_derive::LocalCborize;
 
-pub use db::{Cutoff, Entry};
 pub use traits::{Diff, Footprint};
 
 /// Error variants that can be returned by this package's API.

@@ -41,20 +41,20 @@ pub fn local_cborize_type(
 
 fn impl_cborize_struct(input: &DeriveInput, crate_local: bool) -> TokenStream {
     let name = &input.ident;
-    let generics = &input.generics;
+    let generics = no_default_generics(input);
 
     let mut ts = TokenStream::new();
     match &input.data {
         Data::Struct(ast) => {
             ts.extend(from_struct_to_cbor(
                 name,
-                generics,
+                &generics,
                 &ast.fields,
                 crate_local,
             ));
             ts.extend(from_cbor_to_struct(
                 name,
-                generics,
+                &generics,
                 &ast.fields,
                 crate_local,
             ));
@@ -193,7 +193,7 @@ fn from_cbor_to_struct(
 
 fn impl_cborize_enum(input: &DeriveInput, crate_local: bool) -> TokenStream {
     let name = &input.ident;
-    let generics = &input.generics;
+    let generics = no_default_generics(input);
 
     let mut ts = TokenStream::new();
     match &input.data {
@@ -201,13 +201,13 @@ fn impl_cborize_enum(input: &DeriveInput, crate_local: bool) -> TokenStream {
             let variants: Vec<&Variant> = ast.variants.iter().collect();
             ts.extend(from_enum_to_cbor(
                 name,
-                generics,
+                &generics,
                 &variants,
                 crate_local,
             ));
             ts.extend(from_cbor_to_enum(
                 name,
-                generics,
+                &generics,
                 &variants,
                 crate_local,
             ));
@@ -568,6 +568,18 @@ fn get_root_crate(crate_local: bool) -> TokenStream {
     } else {
         quote! { ::mkit }
     }
+}
+
+fn no_default_generics(input: &DeriveInput) -> Generics {
+    let mut generics = input.generics.clone();
+    generics.params.iter_mut().for_each(|param| match param {
+        GenericParam::Type(param) => {
+            param.eq_token = None;
+            param.default = None;
+        }
+        _ => (),
+    });
+    generics
 }
 
 fn is_bytes_ty(ty: &syn::Type) -> bool {

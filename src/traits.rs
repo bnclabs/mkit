@@ -21,7 +21,7 @@ use crate::Result;
 /// P = C - D (merge operation, to get old value)
 /// ```
 pub trait Diff: Sized + From<<Self as Diff>::D> {
-    type D: Clone + From<Self> + Into<Self> + Footprint;
+    type D: Clone + From<Self> + Into<Self>;
 
     /// Return the delta between two consecutive versions of a value.
     /// `Delta = New - Old`.

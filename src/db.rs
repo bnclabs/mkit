@@ -1,30 +1,22 @@
 use std::ops::Bound;
 
-use crate::{
-    cbor::{FromCbor, IntoCbor},
-    Diff, LocalCborize,
-};
+use crate::LocalCborize;
+
+#[derive(Clone)]
+pub struct NoDiff;
 
 const ENTRY_VER: u32 = 0x0001;
 const VALUE_VER: u32 = 0x0001;
 const DELTA_VER: u32 = 0x0001;
 
 #[derive(Clone, LocalCborize)]
-pub struct Entry<K, V>
-where
-    V: crate::Diff,
-    <V as Diff>::D: IntoCbor + FromCbor,
-{
+pub struct Entry<K, V, D = NoDiff> {
     pub key: K,
     pub value: Value<V>,
-    pub deltas: Vec<Delta<<V as crate::Diff>::D>>,
+    pub deltas: Vec<Delta<D>>,
 }
 
-impl<K, V> Entry<K, V>
-where
-    V: crate::Diff,
-    <V as Diff>::D: IntoCbor + FromCbor,
-{
+impl<K, V, D> Entry<K, V, D> {
     pub const ID: u32 = ENTRY_VER;
 }
 
@@ -48,11 +40,7 @@ impl<D> Delta<D> {
     pub const ID: u32 = DELTA_VER;
 }
 
-impl<K, V> Entry<K, V>
-where
-    V: crate::Diff,
-    <V as Diff>::D: IntoCbor + FromCbor,
-{
+impl<K, V, D> Entry<K, V, D> {
     pub fn to_seqno(&self) -> u64 {
         match self.value {
             Value::U { seqno, .. } => seqno,
@@ -67,7 +55,7 @@ where
         }
     }
 
-    pub fn purge(mut self, cutoff: crate::Cutoff) -> Option<Self>
+    pub fn purge(mut self, cutoff: crate::db::Cutoff) -> Option<Self>
     where
         Self: Sized,
     {
@@ -77,19 +65,19 @@ where
         };
 
         let cutoff = match cutoff {
-            crate::Cutoff::Mono if deleted => return None,
-            crate::Cutoff::Mono => {
+            crate::db::Cutoff::Mono if deleted => return None,
+            crate::db::Cutoff::Mono => {
                 self.deltas = vec![];
                 return Some(self);
             }
-            crate::Cutoff::Lsm(cutoff) => cutoff,
-            crate::Cutoff::Tombstone(cutoff) if deleted => match cutoff {
+            crate::db::Cutoff::Lsm(cutoff) => cutoff,
+            crate::db::Cutoff::Tombstone(cutoff) if deleted => match cutoff {
                 Bound::Included(cutoff) if val_seqno <= cutoff => return None,
                 Bound::Excluded(cutoff) if val_seqno < cutoff => return None,
                 Bound::Unbounded => return None,
                 _ => return Some(self),
             },
-            crate::Cutoff::Tombstone(_) => return Some(self),
+            crate::db::Cutoff::Tombstone(_) => return Some(self),
         };
 
         // If all versions of this entry are before cutoff, then purge entry
