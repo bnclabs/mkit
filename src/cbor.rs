@@ -106,7 +106,7 @@ impl arbitrary::Arbitrary for Cbor {
             }
             7 => {
                 let sval: SimpleValue = u.arbitrary()?;
-                sval.try_into().unwrap()
+                sval.into_cbor().unwrap()
             }
             _ => unreachable!(),
         };
@@ -618,25 +618,23 @@ impl PartialEq for SimpleValue {
     }
 }
 
-impl TryFrom<SimpleValue> for Cbor {
-    type Error = Error;
-
-    fn try_from(sval: SimpleValue) -> Result<Cbor> {
+impl IntoCbor for SimpleValue {
+    fn into_cbor(self) -> Result<Cbor> {
         use SimpleValue::*;
 
-        let val = match sval {
+        let val = match self {
             Unassigned => err_at!(FailConvert, msg: "simple-value-unassigned")?,
-            True => Cbor::Major7(Info::Tiny(20), sval),
-            False => Cbor::Major7(Info::Tiny(21), sval),
-            Null => Cbor::Major7(Info::Tiny(22), sval),
+            val @ True => Cbor::Major7(Info::Tiny(20), val),
+            val @ False => Cbor::Major7(Info::Tiny(21), val),
+            val @ Null => Cbor::Major7(Info::Tiny(22), val),
             Undefined => err_at!(FailConvert, msg: "simple-value-undefined")?,
             Reserved24(_) => {
                 err_at!(FailConvert, msg: "simple-value-unassigned1")?
             }
             F16(_) => err_at!(FailConvert, msg: "simple-value-f16")?,
-            F32(_) => Cbor::Major7(Info::U32, sval),
-            F64(_) => Cbor::Major7(Info::U64, sval),
-            Break => Cbor::Major7(Info::Indefinite, sval),
+            val @ F32(_) => Cbor::Major7(Info::U32, val),
+            val @ F64(_) => Cbor::Major7(Info::U64, val),
+            val @ Break => Cbor::Major7(Info::Indefinite, val),
         };
 
         Ok(val)
@@ -904,7 +902,7 @@ impl PartialOrd for Key {
 }
 
 impl IntoCbor for Key {
-    fn into_cbor(self: Key) -> Result<Cbor> {
+    fn into_cbor(self) -> Result<Cbor> {
         let val = match self {
             Key::U64(key) => Cbor::Major0(key.into(), key),
             Key::N64(key) if key >= 0 => {
@@ -921,10 +919,10 @@ impl IntoCbor for Key {
                 err_at!(FailConvert, key.len().try_into())?,
                 key.into(),
             ),
-            Key::Bool(true) => SimpleValue::True.try_into()?,
-            Key::Bool(false) => SimpleValue::False.try_into()?,
-            Key::F32(key) => SimpleValue::F32(key).try_into()?,
-            Key::F64(key) => SimpleValue::F64(key).try_into()?,
+            Key::Bool(true) => SimpleValue::True.into_cbor()?,
+            Key::Bool(false) => SimpleValue::False.into_cbor()?,
+            Key::F32(key) => SimpleValue::F32(key).into_cbor()?,
+            Key::F64(key) => SimpleValue::F64(key).into_cbor()?,
         };
 
         Ok(val)
@@ -994,8 +992,8 @@ where
 impl IntoCbor for bool {
     fn into_cbor(self) -> Result<Cbor> {
         match self {
-            true => SimpleValue::True.try_into(),
-            false => SimpleValue::False.try_into(),
+            true => SimpleValue::True.into_cbor(),
+            false => SimpleValue::False.into_cbor(),
         }
     }
 }
@@ -1012,7 +1010,7 @@ impl FromCbor for bool {
 
 impl IntoCbor for f32 {
     fn into_cbor(self) -> Result<Cbor> {
-        SimpleValue::F32(self).try_into()
+        SimpleValue::F32(self).into_cbor()
     }
 }
 
@@ -1027,7 +1025,7 @@ impl FromCbor for f32 {
 
 impl IntoCbor for f64 {
     fn into_cbor(self) -> Result<Cbor> {
-        SimpleValue::F64(self).try_into()
+        SimpleValue::F64(self).into_cbor()
     }
 }
 
@@ -1255,7 +1253,7 @@ where
     fn into_cbor(self) -> Result<Cbor> {
         match self {
             Some(val) => val.into_cbor(),
-            None => SimpleValue::Null.try_into(),
+            None => SimpleValue::Null.into_cbor(),
         }
     }
 }
