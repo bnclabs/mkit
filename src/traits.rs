@@ -32,7 +32,7 @@ pub trait Diff: Sized + From<<Self as Diff>::D> {
 
 /// Trait to build and manage keys in a bitmapped Bloom-filter.
 // TODO: should we generate 32-bit or 64-bit hashes to index into bitmap.
-pub trait Bloom: Sized {
+pub trait Bloom: Sized + Default {
     type Err: std::fmt::Display;
 
     /// Return the number of items in the bitmap.
