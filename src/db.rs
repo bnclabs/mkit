@@ -1,13 +1,27 @@
 use std::{borrow::Borrow, ops::Bound};
 
-use crate::LocalCborize;
+use crate::{cbor::IntoCbor, LocalCborize};
 
-#[derive(Clone)]
-pub struct NoDiff;
+pub trait BuildIndex<K, V, B> {
+    type Err;
+
+    fn from_iter<I, D>(self, iter: I, bitmap: B) -> Result<(), Self::Err>
+    where
+        I: Iterator<Item = Entry<K, V, D>>,
+        D: Clone + IntoCbor;
+}
 
 const ENTRY_VER: u32 = 0x0001;
 const VALUE_VER: u32 = 0x0001;
 const DELTA_VER: u32 = 0x0001;
+const NDIFF_VER: u32 = 0x0001;
+
+#[derive(Clone, LocalCborize)]
+pub struct NoDiff;
+
+impl NoDiff {
+    pub const ID: u32 = NDIFF_VER;
+}
 
 #[derive(Clone, LocalCborize)]
 pub struct Entry<K, V, D = NoDiff> {
@@ -43,6 +57,16 @@ impl<D> Delta<D> {
         match self {
             Delta::U { seqno, .. } => *seqno,
             Delta::D { seqno } => *seqno,
+        }
+    }
+}
+
+impl<K, V, D> Entry<K, V, D> {
+    pub fn new(key: K, value: V) -> Entry<K, V, D> {
+        Entry {
+            key,
+            value: Value::U { value, seqno: 0 },
+            deltas: Vec::default(),
         }
     }
 }

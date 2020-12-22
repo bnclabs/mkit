@@ -1,7 +1,5 @@
 use std::hash::Hash;
 
-use crate::Result;
-
 /// Trait for diffable values.
 ///
 /// Version control is a necessary feature for non-destructive writes.
@@ -32,20 +30,13 @@ pub trait Diff: Sized + From<<Self as Diff>::D> {
     fn merge(&self, delta: &Self::D) -> Self;
 }
 
-/// Trait that can give an approximate memory or disk footprint for
-/// values of a given type.
-pub trait Footprint {
-    fn footprint(&self) -> Result<usize>;
-}
-
 /// Trait to build and manage keys in a bitmapped Bloom-filter.
 // TODO: should we generate 32-bit or 64-bit hashes to index into bitmap.
 pub trait Bloom: Sized {
-    /// Create an empty bit-map.
-    fn create() -> Self;
+    type Err: std::fmt::Display;
 
     /// Return the number of items in the bitmap.
-    fn len(&self) -> Result<usize>;
+    fn len(&self) -> Result<usize, Self::Err>;
 
     /// Add key into the index.
     fn add_key<Q: ?Sized + Hash>(&mut self, element: &Q);
@@ -61,8 +52,8 @@ pub trait Bloom: Sized {
     fn to_vec(&self) -> Vec<u8>;
 
     /// Deserialize the binary array to bit-map.
-    fn from_vec(buf: &[u8]) -> Result<Self>;
+    fn from_vec(buf: &[u8]) -> Result<Self, Self::Err>;
 
     /// Merge two bitmaps.
-    fn or(&self, other: &Self) -> Result<Self>;
+    fn or(&self, other: &Self) -> Result<Self, Self::Err>;
 }
