@@ -1,14 +1,44 @@
-use std::{borrow::Borrow, ops::Bound};
+use std::{borrow::Borrow, hash::Hash, ops::Bound};
 
-use crate::{cbor::IntoCbor, LocalCborize};
+use crate::LocalCborize;
 
-pub trait BuildIndex<K, V, B> {
+/// Trait to bulk-add entries into an index.
+pub trait BuildIndex<K, V, D, B> {
     type Err;
 
-    fn from_iter<I, D>(self, iter: I, bitmap: B) -> Result<(), Self::Err>
+    /// Build an index form iterator. Optionally a bitmap can be specified to
+    /// implement a bloom filter. If bitmap filter is not required, pass bitmap
+    /// as `NoBitmap`.
+    fn build_index<I>(&mut self, iter: I, bitmap: B) -> Result<(), Self::Err>
     where
-        I: Iterator<Item = Entry<K, V, D>>,
-        D: Clone + IntoCbor;
+        I: Iterator<Item = Entry<K, V, D>>;
+}
+
+/// Trait to build and manage keys in a bitmapped Bloom-filter.
+pub trait Bloom: Sized + Default {
+    type Err: std::fmt::Display;
+
+    /// Return the number of items in the bitmap.
+    fn len(&self) -> Result<usize, Self::Err>;
+
+    /// Add key into the index.
+    fn add_key<Q: ?Sized + Hash>(&mut self, element: &Q);
+
+    /// Add key into the index.
+    fn add_digest32(&mut self, digest: u32);
+
+    /// Check whether key in persent, there can be false positives but
+    /// no false negatives.
+    fn contains<Q: ?Sized + Hash>(&self, element: &Q) -> bool;
+
+    /// Serialize the bit-map to binary array.
+    fn to_vec(&self) -> Vec<u8>;
+
+    /// Deserialize the binary array to bit-map.
+    fn from_vec(buf: &[u8]) -> Result<Self, Self::Err>;
+
+    /// Merge two bitmaps.
+    fn or(&self, other: &Self) -> Result<Self, Self::Err>;
 }
 
 const ENTRY_VER: u32 = 0x0001;
@@ -154,7 +184,8 @@ impl<K, V, D> Entry<K, V, D> {
     }
 }
 
-/// Cutoff enumerated parameter to [compact][Index::compact] method.
+/// Cutoff enumerated parameter for compaction. All entries or its versions older
+/// than Cutoff is skipped while compaction.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Cutoff {
     /// Index instances that do not need distributed LSM.

@@ -54,9 +54,9 @@ macro_rules! err_at {
 }
 
 pub mod cbor;
+pub mod data;
 pub mod db;
 pub mod thread;
-pub mod traits;
 
 #[doc(hidden)]
 pub use mkit_derive::Cborize;
