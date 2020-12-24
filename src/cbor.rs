@@ -151,28 +151,21 @@ impl Cbor {
             }
             Cbor::Major2(info, byts) => {
                 let n = encode_hdr(major, *info, w)?;
-                let m = encode_addnl(
-                    err_at!(FailConvert, u64::try_from(byts.len()))?,
-                    w,
-                )?;
+                let m =
+                    encode_addnl(err_at!(FailConvert, u64::try_from(byts.len()))?, w)?;
                 write_w!(w, &byts);
                 n + m + byts.len()
             }
             Cbor::Major3(info, text) => {
                 let n = encode_hdr(major, *info, w)?;
-                let m = encode_addnl(
-                    err_at!(FailCbor, u64::try_from(text.len()))?,
-                    w,
-                )?;
+                let m = encode_addnl(err_at!(FailCbor, u64::try_from(text.len()))?, w)?;
                 write_w!(w, &text);
                 n + m + text.len()
             }
             Cbor::Major4(info, list) => {
                 let n = encode_hdr(major, *info, w)?;
-                let m = encode_addnl(
-                    err_at!(FailConvert, u64::try_from(list.len()))?,
-                    w,
-                )?;
+                let m =
+                    encode_addnl(err_at!(FailConvert, u64::try_from(list.len()))?, w)?;
                 let mut acc = 0;
                 for x in list.iter() {
                     acc += x.do_encode(w, depth + 1)?;
@@ -181,10 +174,7 @@ impl Cbor {
             }
             Cbor::Major5(info, map) => {
                 let n = encode_hdr(major, *info, w)?;
-                let m = encode_addnl(
-                    err_at!(FailConvert, u64::try_from(map.len()))?,
-                    w,
-                )?;
+                let m = encode_addnl(err_at!(FailConvert, u64::try_from(map.len()))?, w)?;
                 let mut acc = 0;
                 for (key, val) in map.iter() {
                     let key = key.clone().into_cbor()?;
@@ -246,9 +236,7 @@ impl Cbor {
                 loop {
                     let (val, k) = Cbor::do_decode(r, depth + 1)?;
                     match val {
-                        Cbor::Major2(_, chunk) => {
-                            data.extend_from_slice(&chunk)
-                        }
+                        Cbor::Major2(_, chunk) => data.extend_from_slice(&chunk),
                         Cbor::Major7(_, SimpleValue::Break) => break,
                         _ => err_at!(FailConvert, msg: "expected byte chunk")?,
                     }
@@ -269,9 +257,7 @@ impl Cbor {
                 loop {
                     let (val, k) = Cbor::do_decode(r, depth + 1)?;
                     match val {
-                        Cbor::Major3(_, chunk) => {
-                            text.extend_from_slice(&chunk)
-                        }
+                        Cbor::Major3(_, chunk) => text.extend_from_slice(&chunk),
                         Cbor::Major7(_, SimpleValue::Break) => break,
                         _ => err_at!(FailConvert, msg: "expected byte chunk")?,
                     }
@@ -635,9 +621,7 @@ impl IntoCbor for SimpleValue {
             val @ False => Cbor::Major7(Info::Tiny(21), val),
             val @ Null => Cbor::Major7(Info::Tiny(22), val),
             Undefined => err_at!(FailConvert, msg: "simple-value-undefined")?,
-            Reserved24(_) => {
-                err_at!(FailConvert, msg: "simple-value-unassigned1")?
-            }
+            Reserved24(_) => err_at!(FailConvert, msg: "simple-value-unassigned1")?,
             F16(_) => err_at!(FailConvert, msg: "simple-value-f16")?,
             val @ F32(_) => Cbor::Major7(Info::U32, val),
             val @ F64(_) => Cbor::Major7(Info::U64, val),
@@ -719,15 +703,9 @@ impl SimpleValue {
                 let val = f64::from_be_bytes(scratch[..8].try_into().unwrap());
                 (SimpleValue::F64(val), 8)
             }
-            Info::Reserved28 => {
-                err_at!(FailCbor, msg: "simple-value-reserved")?
-            }
-            Info::Reserved29 => {
-                err_at!(FailCbor, msg: "simple-value-reserved")?
-            }
-            Info::Reserved30 => {
-                err_at!(FailCbor, msg: "simple-value-reserved")?
-            }
+            Info::Reserved28 => err_at!(FailCbor, msg: "simple-value-reserved")?,
+            Info::Reserved29 => err_at!(FailCbor, msg: "simple-value-reserved")?,
+            Info::Reserved30 => err_at!(FailCbor, msg: "simple-value-reserved")?,
             Info::Indefinite => err_at!(FailCbor, msg: "simple-value-break")?,
         };
         Ok((val, n))
@@ -922,10 +900,9 @@ impl IntoCbor for Key {
             Key::Bytes(key) => {
                 Cbor::Major2(err_at!(FailConvert, key.len().try_into())?, key)
             }
-            Key::Text(key) => Cbor::Major3(
-                err_at!(FailConvert, key.len().try_into())?,
-                key.into(),
-            ),
+            Key::Text(key) => {
+                Cbor::Major3(err_at!(FailConvert, key.len().try_into())?, key.into())
+            }
             Key::Bool(true) => SimpleValue::True.into_cbor()?,
             Key::Bool(false) => SimpleValue::False.into_cbor()?,
             Key::F32(key) => SimpleValue::F32(key).into_cbor()?,
@@ -1131,9 +1108,7 @@ impl FromCbor for isize {
     fn from_cbor(val: Cbor) -> Result<isize> {
         let val = match val {
             Cbor::Major0(_, val) => err_at!(FailConvert, isize::try_from(val))?,
-            Cbor::Major1(_, val) => {
-                -err_at!(FailConvert, isize::try_from(val + 1))?
-            }
+            Cbor::Major1(_, val) => -err_at!(FailConvert, isize::try_from(val + 1))?,
             _ => err_at!(FailConvert, msg: "not a number")?,
         };
         Ok(val)
