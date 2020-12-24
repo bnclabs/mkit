@@ -14,10 +14,6 @@ Contribution
 * Before making a PR,
   * [Install][spellcheck] and run `cargo spellcheck` to remove common spelling mistakes.
   * Run `check.sh` with 0 warnings, 0 errors and all testcases passing.
-  * Run `cargo build` to make sure 0 warnings and 0 errors.
-  * Run `cargo test` to make sure all test cases are passing.
-  * Run `cargo bench` to make sure all benchmark cases are passing.
-  * Run `cargo +nightly clippy --all-targets --all-features` to fix clippy issues.
 * [Developer certificate of origin][dco] is preferred.
 
 [spellcheck]: https://github.com/drahnr/cargo-spellcheck
