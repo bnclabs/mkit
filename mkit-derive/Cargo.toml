@@ -7,7 +7,7 @@ description = "Macros for distributed peer-to-peer applications"
 documentation = "https://docs.rs/mkit"
 repository = "https://github.com/bnclabs/mkit"
 keywords = ["macro", "cbor"]
-categories = ["macro", "cbor"]
+categories = ["encoding"]
 license = "MIT"
 
 [dependencies]
