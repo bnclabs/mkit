@@ -825,7 +825,7 @@ impl arbitrary::Arbitrary for Key {
 
 impl Key {
     /// As per cbor [spec], map's key can be a heterogeneous collection of types.
-    /// That is, some of the keys can be bool, other can be numbers etc ..
+    /// That is, some of the keys can be Boolean, other can be numbers etc ..
     ///
     /// This function defines the ordering for supported key types. As,
     /// * Key::Bool, sort before every other keys.

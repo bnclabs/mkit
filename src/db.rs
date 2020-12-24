@@ -14,7 +14,7 @@ pub trait BuildIndex<K, V, D, B> {
         I: Iterator<Item = Entry<K, V, D>>;
 }
 
-/// Trait to build and manage keys in a bitmapped Bloom-filter.
+/// Trait to build and manage keys in a bit-mapped Bloom-filter.
 pub trait Bloom: Sized + Default {
     type Err: std::fmt::Display;
 
@@ -27,7 +27,7 @@ pub trait Bloom: Sized + Default {
     /// Add key into the index.
     fn add_digest32(&mut self, digest: u32);
 
-    /// Check whether key in persent, there can be false positives but
+    /// Check whether key in present, there can be false positives but
     /// no false negatives.
     fn contains<Q: ?Sized + Hash>(&self, element: &Q) -> bool;
 
@@ -184,14 +184,38 @@ impl<K, V, D> Entry<K, V, D> {
     }
 }
 
-/// Cutoff enumerated parameter for compaction. All entries or its versions older
-/// than Cutoff is skipped while compaction.
+/// Cutoff enumerated parameter for compaction. All entries, or its versions,
+/// older than Cutoff is skipped while compaction. The behavior is captured
+/// below,
+///
+/// _deduplication_
+///
+/// This is basically applicable for snapshots that don't have to preserve
+/// older versions or deleted entries.
+///
+/// _lsm-compaction_
+///
+/// This is applicable for database index that store their index as multi-level
+/// snapshots, similar to [leveldb][leveldb]. Most of the lsm-based-storage will
+/// have their root snapshot as the oldest and only source of truth, but this
+/// is not possible for distributed index that ends up with multiple truths
+/// across different nodes. To facilitate such designs, in lsm mode, even the
+/// root level at any given node, can retain older versions upto a specified
+/// `seqno`, that `seqno` is computed through eventual consistency.
+///
+/// _tombstone-compaction_
+///
+/// Tombstone compaction is similar to `lsm-compaction` with one main
+/// difference. When application logic issue `tombstone-compaction` only
+/// deleted entries that are older than specified seqno will be purged.
+///
+/// [leveldb]: https://en.wikipedia.org/wiki/LevelDB
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Cutoff {
-    /// Index instances that do not need distributed LSM.
+    /// Deduplicating behavior.
     Mono,
-    /// Tombstone-compaction, refer to package-documentation for detail.
+    /// Tombstone compaction.
     Tombstone(Bound<u64>),
-    /// Lsm-compaction, refer to package-documentation for detail.
+    /// Lsm compaction.
     Lsm(Bound<u64>),
 }
