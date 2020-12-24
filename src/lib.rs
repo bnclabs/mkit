@@ -1,5 +1,5 @@
 //! Package implement collection of tools and traits for building
-//! inter-planetary applications.
+//! distributed applications.
 
 #![feature(min_const_generics)]
 #![feature(total_cmp)]

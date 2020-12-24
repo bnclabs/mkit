@@ -1,5 +1,9 @@
+//! Module define all things database related.
+
 use std::{borrow::Borrow, hash::Hash, ops::Bound};
 
+#[allow(unused_imports)]
+use crate::data::Diff;
 use crate::LocalCborize;
 
 /// Trait to bulk-add entries into an index.
@@ -46,6 +50,8 @@ const VALUE_VER: u32 = 0x0001;
 const DELTA_VER: u32 = 0x0001;
 const NDIFF_VER: u32 = 0x0001;
 
+/// Associated type for value-type that don't implement [Diff] trait, i.e
+/// whereever applicable, use NoDiff as delta type.
 #[derive(Clone, LocalCborize)]
 pub struct NoDiff;
 
@@ -53,6 +59,7 @@ impl NoDiff {
     pub const ID: u32 = NDIFF_VER;
 }
 
+/// Entry type, describe a single `{key,value}` entry within indexed data-set.
 #[derive(Clone, LocalCborize)]
 pub struct Entry<K, V, D = NoDiff> {
     pub key: K,
@@ -64,6 +71,7 @@ impl<K, V, D> Entry<K, V, D> {
     pub const ID: u32 = ENTRY_VER;
 }
 
+/// Value type, describe the value part of each entry withing a indexed data-set
 #[derive(Clone, LocalCborize)]
 pub enum Value<V> {
     U { value: V, seqno: u64 },
@@ -74,6 +82,7 @@ impl<V> Value<V> {
     pub const ID: u32 = VALUE_VER;
 }
 
+/// Delta type, describe the older-versions of an indexed entry.
 #[derive(Clone, LocalCborize)]
 pub enum Delta<D> {
     U { delta: D, seqno: u64 },
@@ -184,9 +193,10 @@ impl<K, V, D> Entry<K, V, D> {
     }
 }
 
-/// Cutoff enumerated parameter for compaction. All entries, or its versions,
-/// older than Cutoff is skipped while compaction. The behavior is captured
-/// below,
+/// Cutoff is enumerated type to describe compaction behaviour.
+///
+/// All entries, or its versions, older than Cutoff is skipped while compaction.
+/// The behavior is captured below,
 ///
 /// _deduplication_
 ///

@@ -1,10 +1,11 @@
+//! Module define all things data related.
+
 /// Trait for diff-able values.
 ///
 /// Version control is a necessary feature for non-destructive writes.
-/// Using this trait it is possible to generate concise older versions
-/// Note that this version control follows centralized behavior, as
-/// apposed to distributed behavior, for which we need three-way-merge
-/// trait.
+/// Using this trait it is possible to generate concise older versions as
+/// deltas. Note that this version control follows centralized behavior, as
+/// apposed to distributed behavior, for which we need three-way-merge.
 ///
 /// If,
 /// ```notest

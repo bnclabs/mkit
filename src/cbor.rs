@@ -1,4 +1,11 @@
-//! Simple and easy CBOR serialization.
+//! Module implement simple and easy CBOR serialization.
+//!
+//! _Why use custom cbor implementation while there are off-the-self solutions ?_
+//!
+//! Because [CBOR][cbor] specification itself is open-ended, and custom
+//! implementation means, we can mold it to the needs of distributed apps.
+//!
+//! [cbor]: https://tools.ietf.org/html/rfc7049
 
 use arbitrary::{self, Arbitrary, Unstructured};
 
@@ -26,12 +33,12 @@ macro_rules! write_w {
     };
 }
 
-/// Convert a type to Cbor, which can then be encoded into bytes.
+/// Convert rust-native value to Cbor, which can then be encoded into bytes.
 pub trait IntoCbor {
     fn into_cbor(self) -> Result<Cbor>;
 }
 
-/// Convert a from Cbor, the cbor value is typically obtained by
+/// Convert from Cbor, the cbor value is typically obtained by
 /// decoding it from bytes.
 pub trait FromCbor: Sized {
     fn from_cbor(val: Cbor) -> Result<Self>;
@@ -356,13 +363,13 @@ impl Cbor {
         }
     }
 
-    /// Convert `val` as Cbor major type-2 value.
+    /// Convert bytes into Cbor major type-2 value.
     pub fn from_bytes(val: Vec<u8>) -> Result<Self> {
         let n = err_at!(FailConvert, u64::try_from(val.len()))?;
         Ok(Cbor::Major2(n.into(), val))
     }
 
-    /// Convert Cbor major type-2 value as bytes.
+    /// Convert Cbor major type-2 value into bytes.
     pub fn into_bytes(self) -> Result<Vec<u8>> {
         match self {
             Cbor::Major2(_, val) => Ok(val),
