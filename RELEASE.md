@@ -1,3 +1,6 @@
+0.2.0
+=====
+
 Release Checklist
 =================
 
@@ -11,11 +14,7 @@ Release Checklist
   * Short description.
   * Contribution guidelines.
 * Cargo checklist
-  * cargo +stable build; cargo +nightly build
-  * cargo +stable doc; cargo +nightly doc
-  * cargo +stable test; cargo +nightly test
-  * cargo +nightly bench
-  * cargo +nightly clippy --all-targets --all-features
+  * check.sh
 * Cargo spell check.
 * Create a git-tag for the new version.
 * Cargo publish the new version.

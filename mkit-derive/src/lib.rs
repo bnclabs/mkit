@@ -34,7 +34,9 @@ pub fn local_cborize_type(
     let gen = match &input.data {
         Data::Struct(_) => impl_cborize_struct(&input, true),
         Data::Enum(_) => impl_cborize_enum(&input, true),
-        Data::Union(_) => abort_call_site!("cannot derive Cborize for union"),
+        Data::Union(_) => {
+            abort_call_site!("cannot derive LocalCborize for union")
+        }
     };
     gen.into()
 }

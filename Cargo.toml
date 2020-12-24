@@ -1,6 +1,6 @@
 [package]
 name = "mkit"
-version = "0.1.0"
+version = "0.2.0"
 description = "Tools and macros for distributed and peer-to-peer applications"
 authors = ["prataprc <prataprc@gmail.com>"]
 documentation = "https://docs.rs/mkit/"
@@ -13,7 +13,7 @@ edition = "2018"
 
 [dependencies]
 log = "0.4.8"
-mkit-derive = { path = "mkit-derive", version = "=0.1.0" }
+mkit-derive = { path = "mkit-derive", version = "=0.2.0" }
 arbitrary = { version = "0.4", features = ["derive"] }
 
 [dev-dependencies]

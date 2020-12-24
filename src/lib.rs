@@ -60,7 +60,8 @@ pub mod thread;
 
 #[doc(hidden)]
 pub use mkit_derive::Cborize;
-use mkit_derive::LocalCborize;
+#[doc(hidden)]
+pub use mkit_derive::LocalCborize;
 
 /// Error variants that can be returned by this package's API.
 ///

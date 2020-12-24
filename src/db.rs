@@ -25,6 +25,11 @@ pub trait Bloom: Sized + Default {
     /// Return the number of items in the bitmap.
     fn len(&self) -> Result<usize, Self::Err>;
 
+    /// Return the number of items in the bitmap.
+    fn is_empty(&self) -> Result<bool, Self::Err> {
+        Ok(self.len()? == 0)
+    }
+
     /// Add key into the index.
     fn add_key<Q: ?Sized + Hash>(&mut self, element: &Q);
 
