@@ -17,14 +17,14 @@
 /// D = C - P (diff operation)
 /// P = C - D (merge operation, to get old value)
 /// ```
-pub trait Diff: Sized + From<<Self as Diff>::D> {
-    type D: Clone + From<Self> + Into<Self>;
+pub trait Diff: Sized + From<<Self as Diff>::Delta> {
+    type Delta: Clone + From<Self>;
 
     /// Return the delta between two consecutive versions of a value.
     /// `Delta = New - Old`.
-    fn diff(&self, old: &Self) -> Self::D;
+    fn diff(&self, old: &Self) -> Self::Delta;
 
     /// Merge delta with newer version to return older version of the value.
     /// `Old = New - Delta`.
-    fn merge(&self, delta: &Self::D) -> Self;
+    fn merge(&self, delta: &Self::Delta) -> Self;
 }

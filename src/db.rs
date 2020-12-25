@@ -64,6 +64,25 @@ impl NoDiff {
     pub const ID: u32 = NDIFF_VER;
 }
 
+/// Value type, describe the value part of each entry withing a indexed data-set
+#[derive(Clone, LocalCborize)]
+pub enum Value<V> {
+    U { value: V, seqno: u64 },
+    D { seqno: u64 },
+}
+
+impl<V> Value<V> {
+    pub const ID: u32 = VALUE_VER;
+
+    pub fn set(&mut self, value: V, seqno: u64) {
+        *self = Value::U { value, seqno };
+    }
+
+    pub fn delete(&mut self, seqno: u64) {
+        *self = Value::D { seqno };
+    }
+}
+
 /// Entry type, describe a single `{key,value}` entry within indexed data-set.
 #[derive(Clone, LocalCborize)]
 pub struct Entry<K, V, D = NoDiff> {
@@ -74,17 +93,6 @@ pub struct Entry<K, V, D = NoDiff> {
 
 impl<K, V, D> Entry<K, V, D> {
     pub const ID: u32 = ENTRY_VER;
-}
-
-/// Value type, describe the value part of each entry withing a indexed data-set
-#[derive(Clone, LocalCborize)]
-pub enum Value<V> {
-    U { value: V, seqno: u64 },
-    D { seqno: u64 },
-}
-
-impl<V> Value<V> {
-    pub const ID: u32 = VALUE_VER;
 }
 
 /// Delta type, describe the older-versions of an indexed entry.
@@ -112,6 +120,28 @@ impl<K, V, D> Entry<K, V, D> {
             value: Value::U { value, seqno: 0 },
             deltas: Vec::default(),
         }
+    }
+
+    pub fn insert(&mut self, value: Value<V>)
+    where
+        V: Clone + Diff<Delta = D>,
+        <V as Diff>::Delta: From<V>,
+    {
+        let (value, delta) = match self.value.clone() {
+            Value::U { value: oldv, seqno } => match value.clone() {
+                Value::U { value: v, .. } => {
+                    let delta: <V as Diff>::Delta = v.diff(&oldv);
+                    (value, Delta::U { delta, seqno })
+                }
+                Value::D { .. } => {
+                    let delta: <V as Diff>::Delta = oldv.into();
+                    (value, Delta::U { delta, seqno })
+                }
+            },
+            Value::D { seqno } => (value, Delta::D { seqno }),
+        };
+        self.value = value;
+        self.deltas.insert(0, delta);
     }
 }
 
