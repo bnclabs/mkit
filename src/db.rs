@@ -160,6 +160,10 @@ impl<K, V, D> Entry<K, V, D> {
         self.key.clone()
     }
 
+    pub fn as_key(&self) -> &K {
+        &self.key
+    }
+
     pub fn borrow_key<Q>(&self) -> &Q
     where
         K: Borrow<Q>,
