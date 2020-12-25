@@ -26,7 +26,6 @@ use std::{error, fmt, result};
 // err_at!(ParseError, std::fs::read(file_path), format!("read failed"));
 // ```
 //
-#[macro_export]
 macro_rules! err_at {
     ($v:ident, msg: $($arg:expr),+) => {{
         let prefix = format!("{}:{}", file!(), line!());
