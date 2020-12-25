@@ -86,7 +86,7 @@ impl<T> Spinlock<T> {
     }
 
     /// Acquire latch for read permission.
-    pub fn acquire_read(&self) -> Reader<T> {
+    pub fn read(&self) -> ReadGuard<T> {
         loop {
             let old = self.latchlock.load(SeqCst);
             if (old & Self::LATCH_LOCK_FLAG) == 0 {
@@ -96,7 +96,7 @@ impl<T> Spinlock<T> {
                     if cfg!(feature = "debug") {
                         self.read_locks.fetch_add(1, SeqCst);
                     }
-                    break Reader { door: self };
+                    break ReadGuard { door: self };
                 }
             }
             if cfg!(feature = "debug") {
@@ -106,7 +106,7 @@ impl<T> Spinlock<T> {
     }
 
     /// Acquire latch for write permission.
-    pub fn acquire_write(&self) -> Writer<T> {
+    pub fn write(&self) -> WriteGuard<T> {
         loop {
             let old = self.latchlock.load(SeqCst);
             if (old & Self::LATCH_FLAG) == 0 {
@@ -134,7 +134,7 @@ impl<T> Spinlock<T> {
                     }
                     let door =
                         unsafe { ((self as *const Self) as *mut Self).as_mut().unwrap() };
-                    break Writer { door };
+                    break WriteGuard { door };
                 }
                 panic!("latch is acquired, ZERO readers, but unable to lock !")
             }
@@ -158,11 +158,11 @@ impl<T> Spinlock<T> {
 }
 
 /// Type to handle read-latch, when latchlock gets dropped the latch is released.
-pub struct Reader<'a, T> {
+pub struct ReadGuard<'a, T> {
     door: &'a Spinlock<T>,
 }
 
-impl<'a, T> Deref for Reader<'a, T> {
+impl<'a, T> Deref for ReadGuard<'a, T> {
     type Target = T;
 
     fn deref(&self) -> &T {
@@ -170,18 +170,18 @@ impl<'a, T> Deref for Reader<'a, T> {
     }
 }
 
-impl<'a, T> Drop for Reader<'a, T> {
+impl<'a, T> Drop for ReadGuard<'a, T> {
     fn drop(&mut self) {
         self.door.latchlock.fetch_sub(1, SeqCst);
     }
 }
 
 /// Type to handle write-latch, when latchlock gets dropped the latch is released.
-pub struct Writer<'a, T> {
+pub struct WriteGuard<'a, T> {
     door: &'a mut Spinlock<T>,
 }
 
-impl<'a, T> Deref for Writer<'a, T> {
+impl<'a, T> Deref for WriteGuard<'a, T> {
     type Target = T;
 
     fn deref(&self) -> &T {
@@ -189,13 +189,13 @@ impl<'a, T> Deref for Writer<'a, T> {
     }
 }
 
-impl<'a, T> DerefMut for Writer<'a, T> {
+impl<'a, T> DerefMut for WriteGuard<'a, T> {
     fn deref_mut(&mut self) -> &mut T {
         &mut self.door.value
     }
 }
 
-impl<'a, T> Drop for Writer<'a, T> {
+impl<'a, T> Drop for WriteGuard<'a, T> {
     fn drop(&mut self) {
         let old = self.door.latchlock.load(SeqCst);
         if (old & Spinlock::<T>::READERS_FLAG) > 0 {
