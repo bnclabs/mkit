@@ -55,6 +55,7 @@ macro_rules! err_at {
 pub mod cbor;
 pub mod data;
 pub mod db;
+pub mod spinlock;
 pub mod thread;
 
 #[doc(hidden)]
