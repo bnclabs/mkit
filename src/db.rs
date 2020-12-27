@@ -3,7 +3,7 @@
 use std::{borrow::Borrow, hash::Hash, ops::Bound};
 
 #[allow(unused_imports)]
-use crate::data::Diff;
+use crate::data::{Diff, NoDiff};
 use crate::LocalCborize;
 
 /// Trait to bulk-add entries into an index.
@@ -53,16 +53,6 @@ pub trait Bloom: Sized + Default {
 const ENTRY_VER: u32 = 0x0001;
 const VALUE_VER: u32 = 0x0001;
 const DELTA_VER: u32 = 0x0001;
-const NDIFF_VER: u32 = 0x0001;
-
-/// Associated type for value-type that don't implement [Diff] trait, i.e
-/// whereever applicable, use NoDiff as delta type.
-#[derive(Clone, LocalCborize)]
-pub struct NoDiff;
-
-impl NoDiff {
-    pub const ID: u32 = NDIFF_VER;
-}
 
 /// Value type, describe the value part of each entry withing a indexed data-set
 #[derive(Clone, LocalCborize)]
@@ -114,10 +104,10 @@ impl<D> Delta<D> {
 }
 
 impl<K, V, D> Entry<K, V, D> {
-    pub fn new(key: K, value: V) -> Entry<K, V, D> {
+    pub fn new(key: K, value: V, seqno: u64) -> Entry<K, V, D> {
         Entry {
             key,
-            value: Value::U { value, seqno: 0 },
+            value: Value::U { value, seqno },
             deltas: Vec::default(),
         }
     }

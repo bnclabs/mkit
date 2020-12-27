@@ -1,5 +1,9 @@
 //! Module define all things data related.
 
+use crate::LocalCborize;
+
+const NDIFF_VER: u32 = 0x0001;
+
 /// Trait for diff-able values.
 ///
 /// Version control is a necessary feature for non-destructive writes.
@@ -27,4 +31,13 @@ pub trait Diff: Sized + From<<Self as Diff>::Delta> {
     /// Merge delta with newer version to return older version of the value.
     /// `Old = New - Delta`.
     fn merge(&self, delta: &Self::Delta) -> Self;
+}
+
+/// Associated type for value-type that don't implement [Diff] trait, i.e
+/// whereever applicable, use NoDiff as delta type.
+#[derive(Clone, LocalCborize)]
+pub struct NoDiff;
+
+impl NoDiff {
+    pub const ID: u32 = NDIFF_VER;
 }
