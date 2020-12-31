@@ -112,26 +112,36 @@ impl<K, V, D> Entry<K, V, D> {
         }
     }
 
-    pub fn insert(&mut self, value: Value<V>)
+    pub fn insert(&mut self, value: V, seqn: u64)
     where
         V: Clone + Diff<Delta = D>,
         <V as Diff>::Delta: From<V>,
     {
-        let (value, delta) = match self.value.clone() {
-            Value::U { value: oldv, seqno } => match value.clone() {
-                Value::U { value: v, .. } => {
-                    let delta: <V as Diff>::Delta = v.diff(&oldv);
-                    (value, Delta::U { delta, seqno })
-                }
-                Value::D { .. } => {
-                    let delta: <V as Diff>::Delta = oldv.into();
-                    (value, Delta::U { delta, seqno })
-                }
-            },
-            Value::D { seqno } => (value, Delta::D { seqno }),
+        let delta = match self.value.clone() {
+            Value::U { value: oldv, seqno } => {
+                let delta: <V as Diff>::Delta = value.diff(&oldv);
+                Delta::U { delta, seqno }
+            }
+            Value::D { seqno } => Delta::D { seqno },
         };
-        self.value = value;
+        self.value = Value::U { value, seqno: seqn };
         self.deltas.insert(0, delta);
+    }
+
+    pub fn delete(&mut self, seqn: u64)
+    where
+        V: Clone + Diff<Delta = D>,
+        <V as Diff>::Delta: From<V>,
+    {
+        match self.value.clone() {
+            Value::U { value: oldv, seqno } => {
+                self.value = Value::D { seqno: seqn };
+
+                let delta: <V as Diff>::Delta = oldv.into();
+                self.deltas.insert(0, Delta::U { delta, seqno })
+            }
+            Value::D { .. } => return, // back-to-back delete
+        };
     }
 }
 
