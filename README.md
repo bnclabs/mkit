@@ -1,4 +1,4 @@
-[![Rustdoc](https://img.shields.io/badge/rustdoc-hosted-blue.svg)](https://docs.rs/mkit)
+[![Documentation](https://docs.rs/mkit/badge.svg?style=flat-square)](https://docs.rs/mkit)
 
 Mkit is a collection of traits, utilities and common useful types required
 to build distributed, peer-to-peer applications.
