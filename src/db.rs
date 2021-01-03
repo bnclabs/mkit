@@ -112,10 +112,17 @@ impl<K, V, D> Entry<K, V, D> {
         }
     }
 
+    pub fn new_deleted(key: K, seqno: u64) -> Entry<K, V, D> {
+        Entry {
+            key,
+            value: Value::D { seqno },
+            deltas: Vec::default(),
+        }
+    }
+
     pub fn insert(&mut self, value: V, seqn: u64)
     where
         V: Clone + Diff<Delta = D>,
-        <V as Diff>::Delta: From<V>,
     {
         let delta = match self.value.clone() {
             Value::U { value: oldv, seqno } => {
