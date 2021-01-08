@@ -41,3 +41,25 @@ pub struct NoDiff;
 impl NoDiff {
     pub const ID: u32 = NDIFF_VER;
 }
+
+macro_rules! impl_diff_basic_types {
+    ($($type:ident,)*) => (
+        $(
+            impl Diff for $type {
+                type Delta = $type;
+
+                fn diff(&self, old: &$type) -> Self::Delta {
+                    *old
+                }
+
+                fn merge(&self, delta: &Self::Delta) -> Self {
+                    *delta
+                }
+            }
+        )*
+    );
+}
+
+impl_diff_basic_types![
+    bool, char, f32, f64, i8, i16, i32, i64, i128, isize, u8, u16, u32, u128, usize,
+];
