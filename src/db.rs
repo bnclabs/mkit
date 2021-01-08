@@ -55,7 +55,7 @@ const VALUE_VER: u32 = 0x0001;
 const DELTA_VER: u32 = 0x0001;
 
 /// Value type, describe the value part of each entry withing a indexed data-set
-#[derive(Clone, LocalCborize)]
+#[derive(Clone, Debug, Eq, PartialEq, LocalCborize)]
 pub enum Value<V> {
     U { value: V, seqno: u64 },
     D { seqno: u64 },
@@ -74,7 +74,7 @@ impl<V> Value<V> {
 }
 
 /// Entry type, describe a single `{key,value}` entry within indexed data-set.
-#[derive(Clone, LocalCborize)]
+#[derive(Clone, Debug, Eq, PartialEq, LocalCborize)]
 pub struct Entry<K, V, D = NoDiff> {
     pub key: K,
     pub value: Value<V>,
@@ -86,7 +86,7 @@ impl<K, V, D> Entry<K, V, D> {
 }
 
 /// Delta type, describe the older-versions of an indexed entry.
-#[derive(Clone, LocalCborize)]
+#[derive(Clone, Debug, Eq, PartialEq, LocalCborize)]
 pub enum Delta<D> {
     U { delta: D, seqno: u64 },
     D { seqno: u64 },
