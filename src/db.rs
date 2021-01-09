@@ -1,6 +1,6 @@
 //! Module define all things database related.
 
-use std::{borrow::Borrow, hash::Hash, ops::Bound};
+use std::{borrow::Borrow, fmt, hash::Hash, ops::Bound};
 
 #[allow(unused_imports)]
 use crate::data::{Diff, NoDiff};
@@ -20,7 +20,7 @@ pub trait BuildIndex<K, V, D, B> {
 
 /// Trait to build and manage keys in a bit-mapped Bloom-filter.
 pub trait Bloom: Sized + Default {
-    type Err: std::fmt::Display;
+    type Err: fmt::Display;
 
     /// Return the number of items in the bitmap.
     fn len(&self) -> Result<usize, Self::Err>;
@@ -70,6 +70,13 @@ impl<V> Value<V> {
 
     pub fn delete(&mut self, seqno: u64) {
         *self = Value::D { seqno };
+    }
+
+    pub fn to_seqno(&self) -> u64 {
+        match self {
+            Value::U { seqno, .. } => *seqno,
+            Value::D { seqno } => *seqno,
+        }
     }
 }
 
@@ -145,9 +152,12 @@ impl<K, V, D> Entry<K, V, D> {
                 self.value = Value::D { seqno: seqn };
 
                 let delta: <V as Diff>::Delta = oldv.into();
-                self.deltas.insert(0, Delta::U { delta, seqno })
+                self.deltas.insert(0, Delta::U { delta, seqno });
             }
-            Value::D { .. } => return, // back-to-back delete
+            Value::D { seqno } => {
+                self.value = Value::D { seqno: seqn };
+                self.deltas.insert(0, Delta::D { seqno });
+            }
         };
     }
 }
@@ -167,6 +177,16 @@ impl<K, V, D> Entry<K, V, D> {
         self.key.clone()
     }
 
+    pub fn to_value(&self) -> Option<V>
+    where
+        V: Clone,
+    {
+        match &self.value {
+            Value::U { value, .. } => Some(value.clone()),
+            Value::D { .. } => None,
+        }
+    }
+
     pub fn as_key(&self) -> &K {
         &self.key
     }
@@ -183,6 +203,71 @@ impl<K, V, D> Entry<K, V, D> {
             Value::U { .. } => false,
             Value::D { .. } => true,
         }
+    }
+
+    pub fn to_values(&self) -> Vec<Value<V>>
+    where
+        V: Diff<Delta = D> + Clone,
+        D: Clone,
+    {
+        let mut values = vec![self.value.clone()];
+        let mut val: Option<V> = self.to_value();
+        for d in self.deltas.iter() {
+            let (old, seqno): (Option<V>, u64) = match (val, d.clone()) {
+                (Some(v), Delta::U { delta, seqno }) => (Some(v.merge(&delta)), seqno),
+                (Some(_), Delta::D { seqno }) => (None, seqno),
+                (None, Delta::U { delta, seqno }) => (Some(delta.into()), seqno),
+                (None, Delta::D { seqno }) => (None, seqno),
+            };
+            values.push(
+                old.clone()
+                    .map(|value| Value::U { value, seqno })
+                    .unwrap_or(Value::D { seqno }),
+            );
+            val = old;
+        }
+
+        values.reverse();
+
+        values
+    }
+
+    pub fn contains(&self, other: &Self) -> bool
+    where
+        V: Clone + PartialEq + Diff<Delta = D>,
+        D: Clone,
+    {
+        let values = self.to_values();
+        other.to_values().iter().all(|v| values.contains(v))
+    }
+
+    pub fn merge(&self, other: &Self) -> Self
+    where
+        K: PartialEq + Clone,
+        V: Clone + Diff<Delta = D>,
+        D: Clone + From<V>,
+    {
+        if self.key != other.key {
+            return self.clone();
+        }
+
+        let mut values = self.to_values();
+        values.extend(other.to_values());
+        values.sort_by_key(|v| v.to_seqno());
+
+        let mut entry = match values.remove(0) {
+            Value::U { value, seqno } => Entry::new(self.key.clone(), value, seqno),
+            Value::D { seqno } => Entry::new_deleted(self.key.clone(), seqno),
+        };
+
+        for val in values.into_iter() {
+            match val {
+                Value::U { value, seqno } => entry.insert(value, seqno),
+                Value::D { seqno } => entry.delete(seqno),
+            }
+        }
+
+        entry
     }
 
     pub fn purge(mut self, cutoff: crate::db::Cutoff) -> Option<Self>
@@ -275,3 +360,7 @@ pub enum Cutoff {
     /// Lsm compaction.
     Lsm(Bound<u64>),
 }
+
+#[cfg(test)]
+#[path = "db_test.rs"]
+mod db_test;
