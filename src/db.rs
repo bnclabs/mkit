@@ -110,6 +110,29 @@ impl<D> Delta<D> {
     }
 }
 
+impl<K, V, D> From<(K, Vec<Value<V>>)> for Entry<K, V, D>
+where
+    V: Clone + Diff<Delta = D>,
+    <V as Diff>::Delta: From<V>,
+{
+    fn from((key, mut values): (K, Vec<Value<V>>)) -> Self {
+        if values.len() == 0 {
+            panic!("cannot convert empty set of values to db::Entry")
+        }
+        let mut entry = match values.remove(0) {
+            Value::U { value, seqno } => Entry::new(key, value, seqno),
+            Value::D { seqno } => Entry::new_deleted(key, seqno),
+        };
+        for value in values.into_iter() {
+            match value {
+                Value::U { value, seqno } => entry.insert(value, seqno),
+                Value::D { seqno } => entry.delete(seqno),
+            }
+        }
+        entry
+    }
+}
+
 impl<K, V, D> Entry<K, V, D> {
     pub fn new(key: K, value: V, seqno: u64) -> Entry<K, V, D> {
         Entry {
@@ -255,19 +278,7 @@ impl<K, V, D> Entry<K, V, D> {
         values.extend(other.to_values());
         values.sort_by_key(|v| v.to_seqno());
 
-        let mut entry = match values.remove(0) {
-            Value::U { value, seqno } => Entry::new(self.key.clone(), value, seqno),
-            Value::D { seqno } => Entry::new_deleted(self.key.clone(), seqno),
-        };
-
-        for val in values.into_iter() {
-            match val {
-                Value::U { value, seqno } => entry.insert(value, seqno),
-                Value::D { seqno } => entry.delete(seqno),
-            }
-        }
-
-        entry
+        Entry::from((self.key.clone(), values))
     }
 
     pub fn purge(mut self, cutoff: crate::db::Cutoff) -> Option<Self>

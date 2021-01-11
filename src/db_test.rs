@@ -38,6 +38,7 @@ fn test_entry_values() {
         },
     ];
     assert_eq!(values, refvs);
+    assert_eq!(Entry::from((entry.key.clone(), values)), entry);
 
     entry.delete(9);
     let values = entry.to_values();
