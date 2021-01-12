@@ -7,39 +7,38 @@ use std::{
 
 use super::*;
 
-// TODO: yield_ok == true
-
 #[test]
 fn test_spinlock() {
-    let g = Arc::new(Spinlock::new());
+    let spin = Arc::new(Spinlock::new(0_u64));
     let c = Context {
         n_readers: 4,
         n_writers: 4,
         size: 1024,
     };
 
-    let writer = |g: Arc<Spinlock>, mut data: Box<Data>, idx: usize, c: Context| {
-        let mut res = Vec::with_capacity(c.n_writers);
-        res.resize(res.capacity(), 0);
+    let writer =
+        |spin: Arc<Spinlock<u64>>, mut data: Box<Data>, idx: usize, c: Context| {
+            let mut res = Vec::with_capacity(c.n_writers);
+            res.resize(res.capacity(), 0);
 
-        let start = time::SystemTime::now();
-        let value: Vec<u8> = ((idx * c.size)..((idx * c.size) + c.size))
-            .map(|x| x as u8)
-            .collect();
-        while start.elapsed().unwrap().as_secs() < 10 {
-            {
-                let _w = g.acquire_write(false);
-                data.idx = idx;
-                data.value.copy_from_slice(&value);
-                res[idx] += 1;
+            let start = time::SystemTime::now();
+            let value: Vec<u8> = ((idx * c.size)..((idx * c.size) + c.size))
+                .map(|x| x as u8)
+                .collect();
+            while start.elapsed().unwrap().as_secs() < 10 {
+                {
+                    let _w = spin.write();
+                    data.idx = idx;
+                    data.value.copy_from_slice(&value);
+                    res[idx] += 1;
+                }
             }
-        }
-        Box::leak(data);
+            Box::leak(data);
 
-        Rc::Ws(res)
-    };
+            Rc::Ws(res)
+        };
 
-    let reader = |g: Arc<Spinlock>, data: Box<Data>, c: Context| {
+    let reader = |spin: Arc<Spinlock<u64>>, data: Box<Data>, c: Context| {
         let mut res = Vec::with_capacity(std::cmp::max(c.n_writers, 1));
         res.resize(res.capacity(), 0);
 
@@ -54,7 +53,7 @@ fn test_spinlock() {
         let start = time::SystemTime::now();
         while start.elapsed().unwrap().as_secs() < 10 {
             {
-                let _r = g.acquire_read(false);
+                let _r = spin.read();
                 assert_eq!(values[data.idx], data.value);
                 res[data.idx] += 1;
                 busy_loop(25);
@@ -70,7 +69,7 @@ fn test_spinlock() {
 
     let mut writers = vec![];
     for idx in 0..c.n_writers {
-        let arg1 = Arc::clone(&g);
+        let arg1 = Arc::clone(&spin);
         let arg2 = unsafe { Box::from_raw(data.as_mut() as *mut Data) };
         let (arg3, arg4) = (idx, c.clone());
         writers.push(thread::spawn(move || writer(arg1, arg2, arg3, arg4)));
@@ -78,7 +77,7 @@ fn test_spinlock() {
 
     let mut readers = vec![];
     for _idx in 0..c.n_readers {
-        let arg1 = Arc::clone(&g);
+        let arg1 = Arc::clone(&spin);
         let arg2 = unsafe { Box::from_raw(data.as_mut() as *mut Data) };
         let arg3 = c.clone();
         readers.push(thread::spawn(move || reader(arg1, arg2, arg3)));
@@ -86,7 +85,7 @@ fn test_spinlock() {
 
     print_w_res(writers.into_iter().map(|w| w.join().unwrap()).collect());
     print_r_res(readers.into_iter().map(|r| r.join().unwrap()).collect());
-    println!("Spinlock {}", g.to_stats().unwrap());
+    println!("Spinlock {}", spin.to_stats().unwrap());
 }
 
 struct Data {

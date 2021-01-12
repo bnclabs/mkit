@@ -91,8 +91,7 @@ impl<T> Spinlock<T> {
             let old = self.latchlock.load(SeqCst);
             if (old & Self::LATCH_LOCK_FLAG) == 0 {
                 // latch is not acquired by a writer
-                let n = old + 1;
-                if self.latchlock.compare_and_swap(old, n, SeqCst) == old {
+                if self.latchlock.compare_and_swap(old, old + 1, SeqCst) == old {
                     if cfg!(feature = "debug") {
                         self.read_locks.fetch_add(1, SeqCst);
                     }
@@ -114,8 +113,8 @@ impl<T> Spinlock<T> {
                 if (old & Self::LOCK_FLAG) != 0 {
                     panic!("if latch is flipped-off, lock can't be flipped-on !");
                 }
-                let n = old | Self::LATCH_FLAG;
-                if self.latchlock.compare_and_swap(old, n, SeqCst) == old {
+                let new = old | Self::LATCH_FLAG;
+                if self.latchlock.compare_and_swap(old, new, SeqCst) == old {
                     break;
                 }
             }
@@ -127,8 +126,8 @@ impl<T> Spinlock<T> {
         loop {
             let old = self.latchlock.load(SeqCst);
             if (old & Self::READERS_FLAG) == 0 {
-                let n = old | Self::LOCK_FLAG;
-                if self.latchlock.compare_and_swap(old, n, SeqCst) == old {
+                let new = old | Self::LOCK_FLAG;
+                if self.latchlock.compare_and_swap(old, new, SeqCst) == old {
                     if cfg!(feature = "debug") {
                         self.write_locks.fetch_add(1, SeqCst);
                     }
@@ -234,7 +233,6 @@ impl fmt::Display for Stats {
     }
 }
 
-// TODO
-//#[cfg(test)]
-//#[path = "spinlock_test.rs"]
-//mod spinlock_test;
+#[cfg(test)]
+#[path = "spinlock_test.rs"]
+mod spinlock_test;
