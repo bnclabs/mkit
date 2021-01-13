@@ -1,6 +1,6 @@
 [package]
 name = "mkit"
-version = "0.2.0"
+version = "0.3.0"
 description = "Tools and macros for distributed and peer-to-peer applications"
 authors = ["prataprc <prataprc@gmail.com>"]
 documentation = "https://docs.rs/mkit/"
