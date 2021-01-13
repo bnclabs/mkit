@@ -116,7 +116,7 @@ where
     <V as Diff>::Delta: From<V>,
 {
     fn from((key, mut values): (K, Vec<Value<V>>)) -> Self {
-        if values.len() == 0 {
+        if values.is_empty() {
             panic!("cannot convert empty set of values to db::Entry")
         }
         let mut entry = match values.remove(0) {
