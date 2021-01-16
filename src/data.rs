@@ -35,7 +35,7 @@ pub trait Diff: Sized + From<<Self as Diff>::Delta> {
 
 /// Associated type for value-type that don't implement [Diff] trait, i.e
 /// whereever applicable, use NoDiff as delta type.
-#[derive(Clone, LocalCborize)]
+#[derive(Clone, Default, Debug, LocalCborize)]
 pub struct NoDiff;
 
 impl NoDiff {

@@ -55,6 +55,7 @@ macro_rules! err_at {
 pub mod cbor;
 pub mod data;
 pub mod db;
+pub mod nobitmap;
 pub mod spinlock;
 pub mod thread;
 
@@ -62,6 +63,7 @@ pub mod thread;
 pub use mkit_derive::Cborize;
 #[doc(hidden)]
 pub use mkit_derive::LocalCborize;
+pub use nobitmap::NoBitmap;
 
 /// Error variants that can be returned by this package's API.
 ///
