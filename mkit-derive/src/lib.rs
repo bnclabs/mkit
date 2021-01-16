@@ -27,9 +27,7 @@ pub fn cborize_type(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 
 #[proc_macro_derive(LocalCborize, attributes(cbor))]
 #[proc_macro_error]
-pub fn local_cborize_type(
-    input: proc_macro::TokenStream,
-) -> proc_macro::TokenStream {
+pub fn local_cborize_type(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let input: DeriveInput = syn::parse(input).unwrap();
     let gen = match &input.data {
         Data::Struct(_) => impl_cborize_struct(&input, true),
@@ -85,10 +83,9 @@ fn from_struct_to_cbor(
     let token_fields = match fields {
         Fields::Unit => quote! {},
         Fields::Named(fields) => named_fields_to_cbor(fields),
-        Fields::Unnamed(_) => abort_call_site!(
-            "unnamed struct not supported for Cborize {}",
-            name
-        ),
+        Fields::Unnamed(_) => {
+            abort_call_site!("unnamed struct not supported for Cborize {}", name)
+        }
     };
 
     let mut where_clause = match &generics.where_clause {
@@ -129,10 +126,9 @@ fn from_cbor_to_struct(
     let n_fields = match fields {
         Fields::Unit => 0,
         Fields::Named(fields) => fields.named.len(),
-        Fields::Unnamed(_) => abort_call_site!(
-            "unnamed struct not supported for Cborize {}",
-            name
-        ),
+        Fields::Unnamed(_) => {
+            abort_call_site!("unnamed struct not supported for Cborize {}", name)
+        }
     };
 
     let id_declr = let_id(name, generics);
@@ -160,10 +156,9 @@ fn from_cbor_to_struct(
             let token_fields = cbor_to_named_fields(fields, root_crate.clone());
             quote! { { #token_fields } }
         }
-        Fields::Unnamed(_) => abort_call_site!(
-            "unnamed struct not supported for Cborize {}",
-            name
-        ),
+        Fields::Unnamed(_) => {
+            abort_call_site!("unnamed struct not supported for Cborize {}", name)
+        }
     };
 
     let mut where_clause = match &generics.where_clause {
@@ -201,18 +196,8 @@ fn impl_cborize_enum(input: &DeriveInput, crate_local: bool) -> TokenStream {
     match &input.data {
         Data::Enum(ast) => {
             let variants: Vec<&Variant> = ast.variants.iter().collect();
-            ts.extend(from_enum_to_cbor(
-                name,
-                &generics,
-                &variants,
-                crate_local,
-            ));
-            ts.extend(from_cbor_to_enum(
-                name,
-                &generics,
-                &variants,
-                crate_local,
-            ));
+            ts.extend(from_enum_to_cbor(name, &generics, &variants, crate_local));
+            ts.extend(from_cbor_to_enum(name, &generics, &variants, crate_local));
             ts
         }
         _ => unreachable!(),
@@ -253,8 +238,7 @@ fn from_enum_to_cbor(
                 }
             }
             Fields::Unnamed(fields) => {
-                let (params, body) =
-                    unnamed_fields_to_cbor(fields, root_crate.clone());
+                let (params, body) = unnamed_fields_to_cbor(fields, root_crate.clone());
                 quote! {
                     #name::#variant_name(#params) => {
                         items.push(#variant_lit.into_cbor()?);
@@ -367,13 +351,11 @@ fn from_cbor_to_enum(
                 #variant_lit => #name::#variant_name
             },
             Fields::Named(fields) => {
-                let (_, body) =
-                    cbor_to_named_var_fields(fields, root_crate.clone());
+                let (_, body) = cbor_to_named_var_fields(fields, root_crate.clone());
                 quote! { #variant_lit => #name::#variant_name { #body }, }
             }
             Fields::Unnamed(fields) => {
-                let (_, body) =
-                    cbor_to_unnamed_fields(fields, root_crate.clone());
+                let (_, body) = cbor_to_unnamed_fields(fields, root_crate.clone());
                 quote! { #variant_lit => #name::#variant_name(#body), }
             }
         };
@@ -402,12 +384,12 @@ fn from_cbor_to_enum(
 
                 match variant_name.as_str() {
                     #check_variants
-                    _ => unreachable!(),
+                    _ => err_at!(FailConvert, msg: "invalid variant_name {}", variant_name)?,
                 }
 
                 let val = match variant_name.as_str() {
                     #tok_variants
-                    _ => unreachable!(),
+                    _ => err_at!(FailConvert, msg: "invalid variant_name {}", variant_name)?,
                 };
                 Ok(val)
             }
@@ -433,9 +415,7 @@ fn named_fields_to_cbor(fields: &FieldsNamed) -> TokenStream {
     tokens
 }
 
-fn named_var_fields_to_cbor(
-    fields: &FieldsNamed,
-) -> (TokenStream, TokenStream) {
+fn named_var_fields_to_cbor(fields: &FieldsNamed) -> (TokenStream, TokenStream) {
     let mut params = TokenStream::new();
     let mut body = TokenStream::new();
     for field in fields.named.iter() {
@@ -463,8 +443,7 @@ fn unnamed_fields_to_cbor(
 ) -> (TokenStream, TokenStream) {
     let mut params = TokenStream::new();
     let mut body = TokenStream::new();
-    for (field_name, field) in UNNAMED_FIELDS.iter().zip(fields.unnamed.iter())
-    {
+    for (field_name, field) in UNNAMED_FIELDS.iter().zip(fields.unnamed.iter()) {
         let field_name = Ident::new(field_name, field.span());
         let is_bytes = is_bytes_ty(&field.ty);
 
@@ -483,10 +462,7 @@ fn unnamed_fields_to_cbor(
     (params, body)
 }
 
-fn cbor_to_named_fields(
-    fields: &FieldsNamed,
-    root_crate: TokenStream,
-) -> TokenStream {
+fn cbor_to_named_fields(fields: &FieldsNamed, root_crate: TokenStream) -> TokenStream {
     let mut tokens = TokenStream::new();
     for field in fields.named.iter() {
         let is_bytes = is_bytes_ty(&field.ty);
@@ -539,8 +515,7 @@ fn cbor_to_unnamed_fields(
 ) -> (TokenStream, TokenStream) {
     let mut params = TokenStream::new();
     let mut body = TokenStream::new();
-    for (field_name, field) in UNNAMED_FIELDS.iter().zip(fields.unnamed.iter())
-    {
+    for (field_name, field) in UNNAMED_FIELDS.iter().zip(fields.unnamed.iter()) {
         let field_name = Ident::new(field_name, field.span());
         let is_bytes = is_bytes_ty(&field.ty);
 
