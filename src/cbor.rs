@@ -706,7 +706,7 @@ impl SimpleValue {
             Info::Reserved28 => err_at!(FailCbor, msg: "simple-value-reserved")?,
             Info::Reserved29 => err_at!(FailCbor, msg: "simple-value-reserved")?,
             Info::Reserved30 => err_at!(FailCbor, msg: "simple-value-reserved")?,
-            Info::Indefinite => err_at!(FailCbor, msg: "simple-value-break")?,
+            Info::Indefinite => (SimpleValue::Break, 0),
         };
         Ok((val, n))
     }
