@@ -33,14 +33,21 @@ macro_rules! write_w {
     };
 }
 
-/// Convert rust-native value to Cbor, which can then be encoded into bytes.
+/// Convert rust-native value to [Cbor], which can then be encoded into bytes
+/// using Cbor.
+///
+/// Refer to [FromCbor] the reverse transformation of a type to [Cbor] value.
 pub trait IntoCbor {
+    /// Convert implementing type's value into [Cbor].
     fn into_cbor(self) -> Result<Cbor>;
 }
 
 /// Convert from Cbor, the cbor value is typically obtained by
 /// decoding it from bytes.
+///
+/// Refer to [IntoCbor] the reverse transformation of [Cbor] value into type's value.
 pub trait FromCbor: Sized {
+    /// Convert value from [Cbor] into type's value.
     fn from_cbor(val: Cbor) -> Result<Self>;
 }
 
@@ -349,13 +356,19 @@ impl Cbor {
         }
     }
 
-    /// Convert bytes into Cbor major type-2 value.
-    pub fn from_bytes(val: Vec<u8>) -> Result<Self> {
+    /// Convert bytes into Cbor major type-2 value. There is an ambiguity
+    /// in how we should treat `Vec<u8>` type. On one hand it can be treated
+    /// as Cbor bytes (Major type-2) and on the other hand it can be treated
+    /// as list of bytes (Major type-4). Since this ambiguity is best resolved
+    /// at the application side, we are exposing this API to convert `Vec<u8>`
+    /// into Cbor Major type-2, while using the [IntoCbor] trait shall convert
+    /// it into Cbor Major type-4, a list of integer.
+    pub fn bytes_into_cbor(val: Vec<u8>) -> Result<Self> {
         let n = err_at!(FailConvert, u64::try_from(val.len()))?;
         Ok(Cbor::Major2(n.into(), val))
     }
 
-    /// Convert Cbor major type-2 value into bytes.
+    /// This is converse of [Cbor::bytes_into_cbor].
     pub fn into_bytes(self) -> Result<Vec<u8>> {
         match self {
             Cbor::Major2(_, val) => Ok(val),
