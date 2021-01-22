@@ -33,10 +33,10 @@ pub trait Bloom: Sized + Default {
     fn contains<Q: ?Sized + Hash>(&self, element: &Q) -> bool;
 
     /// Serialize the bit-map to binary array.
-    fn into_bytes(&self) -> Vec<u8>;
+    fn to_bytes(&self) -> Result<Vec<u8>, Self::Err>;
 
     /// Deserialize the binary array to bit-map.
-    fn from_bytes(buf: &[u8]) -> Result<Self, Self::Err>;
+    fn from_bytes(buf: &[u8]) -> Result<(Self, usize), Self::Err>;
 
     /// Merge two bitmaps.
     fn or(&self, other: &Self) -> Result<Self, Self::Err>;

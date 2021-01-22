@@ -18,13 +18,13 @@ impl Bloom for NoBitmap {
         true
     }
 
-    fn into_bytes(&self) -> Vec<u8> {
-        vec![]
+    fn to_bytes(&self) -> Result<Vec<u8>, Self::Err> {
+        Ok(vec![])
     }
 
     /// Deserialize the binary array to bit-map.
-    fn from_bytes(_buf: &[u8]) -> Result<Self, Self::Err> {
-        Ok(NoBitmap)
+    fn from_bytes(_buf: &[u8]) -> Result<(Self, usize), Self::Err> {
+        Ok((NoBitmap, 0))
     }
 
     /// Merge two bitmaps.
