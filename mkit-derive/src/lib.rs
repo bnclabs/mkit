@@ -176,7 +176,7 @@ fn from_cbor_to_struct(
     quote! {
         impl#generics #root_crate::cbor::FromCbor for #name#generics #where_clause {
             fn from_cbor(value: #root_crate::cbor::Cbor) -> #root_crate::Result<#name#generics> {
-                use #root_crate::{cbor::IntoCbor, Error};
+                use #root_crate::{cbor::IntoCbor, Error, err_at};
 
                 let mut items = Vec::<#root_crate::cbor::Cbor>::from_cbor(value)?;
 
@@ -376,7 +376,7 @@ fn from_cbor_to_enum(
     quote! {
         impl#generics #root_crate::cbor::FromCbor for #name#generics #where_clause {
             fn from_cbor(value: #root_crate::cbor::Cbor) -> #root_crate::Result<#name#generics> {
-                use #root_crate::{cbor::IntoCbor, Error};
+                use #root_crate::{cbor::IntoCbor, Error, err_at};
 
                 let mut items =  Vec::<#root_crate::cbor::Cbor>::from_cbor(value)?;
 
@@ -404,7 +404,7 @@ fn named_fields_to_cbor(fields: &FieldsNamed) -> TokenStream {
 
         match &field.ident {
             Some(field_name) if is_bytes => tokens.extend(quote! {
-                items.push(mkit::cbor::Cbor::from_bytes(value.#field_name)?);
+                items.push(mkit::cbor::Cbor::bytes_into_cbor(value.#field_name)?);
             }),
             Some(field_name) => tokens.extend(quote! {
                 items.push(value.#field_name.into_cbor()?);
@@ -426,7 +426,7 @@ fn named_var_fields_to_cbor(fields: &FieldsNamed) -> (TokenStream, TokenStream) 
 
         match &field.ident {
             Some(field_name) if is_bytes => body.extend(quote! {
-                items.push(mkit::cbor::Cbor::from_bytes(#field_name)?);
+                items.push(mkit::cbor::Cbor::bytes_into_cbor(#field_name)?);
             }),
             Some(field_name) => body.extend(quote! {
                 items.push(#field_name.into_cbor()?);
@@ -451,7 +451,7 @@ fn unnamed_fields_to_cbor(
 
         if is_bytes {
             body.extend(quote! {
-                items.push(#root_crate::cbor::Cbor::from_bytes(#field_name)?);
+                items.push(#root_crate::cbor::Cbor::bytes_into_cbor(#field_name)?);
             });
         } else {
             body.extend(quote! {

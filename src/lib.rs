@@ -7,25 +7,26 @@
 
 use std::{error, fmt, result};
 
-// Short form to compose Error values.
-//
-// Here are few possible ways:
-//
-// ```ignore
-// use crate::Error;
-// err_at!(ParseError, msg: format!("bad argument"));
-// ```
-//
-// ```ignore
-// use crate::Error;
-// err_at!(ParseError, std::io::read(buf));
-// ```
-//
-// ```ignore
-// use crate::Error;
-// err_at!(ParseError, std::fs::read(file_path), format!("read failed"));
-// ```
-//
+/// Short form to compose Error values.
+///
+/// Here are few possible ways:
+///
+/// ```ignore
+/// use crate::Error;
+/// err_at!(ParseError, msg: format!("bad argument"));
+/// ```
+///
+/// ```ignore
+/// use crate::Error;
+/// err_at!(ParseError, std::io::read(buf));
+/// ```
+///
+/// ```ignore
+/// use crate::Error;
+/// err_at!(ParseError, std::fs::read(file_path), format!("read failed"));
+/// ```
+///
+#[macro_export]
 macro_rules! err_at {
     ($v:ident, msg: $($arg:expr),+) => {{
         let prefix = format!("{}:{}", file!(), line!());
@@ -58,12 +59,12 @@ pub mod db;
 pub mod nobitmap;
 pub mod spinlock;
 pub mod thread;
+// mod xorfilter;
 
 #[doc(hidden)]
 pub use mkit_derive::Cborize;
 #[doc(hidden)]
 pub use mkit_derive::LocalCborize;
-pub use nobitmap::NoBitmap;
 
 /// Error variants that can be returned by this package's API.
 ///
