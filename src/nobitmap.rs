@@ -10,13 +10,9 @@ pub struct NoBitmap;
 impl Bloom for NoBitmap {
     type Err = Infallible;
 
-    fn add_key<Q: ?Sized + Hash>(&mut self, _key: &Q) {
-        ()
-    }
+    fn add_key<Q: ?Sized + Hash>(&mut self, _key: &Q) {}
 
-    fn add_digest32(&mut self, _digest: u32) {
-        ()
-    }
+    fn add_digest32(&mut self, _digest: u32) {}
 
     fn contains<Q: ?Sized + Hash>(&self, _element: &Q) -> bool {
         true
