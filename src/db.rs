@@ -22,16 +22,8 @@ pub trait BuildIndex<K, V, D, B> {
 pub trait Bloom: Sized + Default {
     type Err: fmt::Display;
 
-    /// Return the number of items in the bitmap.
-    fn len(&self) -> Result<usize, Self::Err>;
-
-    /// Return the number of items in the bitmap.
-    fn is_empty(&self) -> Result<bool, Self::Err> {
-        Ok(self.len()? == 0)
-    }
-
     /// Add key into the index.
-    fn add_key<Q: ?Sized + Hash>(&mut self, element: &Q);
+    fn add_key<Q: ?Sized + Hash>(&mut self, key: &Q);
 
     /// Add key into the index.
     fn add_digest32(&mut self, digest: u32);
@@ -41,10 +33,10 @@ pub trait Bloom: Sized + Default {
     fn contains<Q: ?Sized + Hash>(&self, element: &Q) -> bool;
 
     /// Serialize the bit-map to binary array.
-    fn to_vec(&self) -> Vec<u8>;
+    fn into_bytes(&self) -> Vec<u8>;
 
     /// Deserialize the binary array to bit-map.
-    fn from_vec(buf: &[u8]) -> Result<Self, Self::Err>;
+    fn from_bytes(buf: &[u8]) -> Result<Self, Self::Err>;
 
     /// Merge two bitmaps.
     fn or(&self, other: &Self) -> Result<Self, Self::Err>;

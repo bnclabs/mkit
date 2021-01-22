@@ -1,19 +1,16 @@
+//! Module implement a default bitmap filter type.
 use std::{convert::Infallible, hash::Hash};
 
 use crate::db::Bloom;
 
-/// Place holder type to skip bloom filter while building index.
+/// Useful as type-parameter that implement a no-op bloom-filter.
 #[derive(Clone, Default)]
 pub struct NoBitmap;
 
 impl Bloom for NoBitmap {
     type Err = Infallible;
 
-    fn len(&self) -> Result<usize, Self::Err> {
-        Ok(0)
-    }
-
-    fn add_key<Q: ?Sized + Hash>(&mut self, _element: &Q) {
+    fn add_key<Q: ?Sized + Hash>(&mut self, _key: &Q) {
         ()
     }
 
@@ -25,12 +22,12 @@ impl Bloom for NoBitmap {
         true
     }
 
-    fn to_vec(&self) -> Vec<u8> {
+    fn into_bytes(&self) -> Vec<u8> {
         vec![]
     }
 
     /// Deserialize the binary array to bit-map.
-    fn from_vec(_buf: &[u8]) -> Result<Self, Self::Err> {
+    fn from_bytes(_buf: &[u8]) -> Result<Self, Self::Err> {
         Ok(NoBitmap)
     }
 
