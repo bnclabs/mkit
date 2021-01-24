@@ -28,6 +28,11 @@ pub trait Bloom: Sized + Default {
     /// Add key into the index.
     fn add_digest32(&mut self, digest: u32);
 
+    /// Build keys, added so far via `add_key` and `add_digest32` into the
+    /// bitmap index. Useful for types that support batch building and
+    /// immutable bitmap index.
+    fn build(&mut self);
+
     /// Check whether key in present, there can be false positives but
     /// no false negatives.
     fn contains<Q: ?Sized + Hash>(&self, element: &Q) -> bool;
@@ -68,6 +73,13 @@ impl<V> Value<V> {
         match self {
             Value::U { seqno, .. } => *seqno,
             Value::D { seqno } => *seqno,
+        }
+    }
+
+    pub fn is_deleted(&self) -> bool {
+        match self {
+            Value::U { .. } => false,
+            Value::D { .. } => true,
         }
     }
 }
@@ -358,10 +370,10 @@ impl<K, V, D> Entry<K, V, D> {
 pub enum Cutoff {
     /// Deduplicating behavior.
     Mono,
-    /// Tombstone compaction.
-    Tombstone(Bound<u64>),
     /// Lsm compaction.
     Lsm(Bound<u64>),
+    /// Tombstone compaction.
+    Tombstone(Bound<u64>),
 }
 
 #[cfg(test)]

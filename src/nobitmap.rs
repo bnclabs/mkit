@@ -14,6 +14,8 @@ impl Bloom for NoBitmap {
 
     fn add_digest32(&mut self, _digest: u32) {}
 
+    fn build(&mut self) {}
+
     fn contains<Q: ?Sized + Hash>(&self, _element: &Q) -> bool {
         true
     }
