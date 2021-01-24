@@ -135,7 +135,7 @@ fn from_cbor_to_struct(
     let preamble = quote! {
         // validate the cbor msg for this type.
         if items.len() == 0 {
-            err_at!(FailConvert, msg: "empty msg for {}", #name_lit)?;
+            #croot::err_at!(FailConvert, msg: "empty msg for {}", #name_lit)?;
         }
         let data_id = items.remove(0);
         let type_id: #croot::cbor::Cbor = {
@@ -143,10 +143,10 @@ fn from_cbor_to_struct(
             #croot::cbor::Tag::from_identifier(id).into()
         };
         if data_id != type_id {
-            err_at!(FailConvert, msg: "bad id for {}", #name_lit)?;
+            #croot::err_at!(FailConvert, msg: "bad id for {}", #name_lit)?;
         }
         if #n_fields != items.len() {
-            err_at!(FailConvert, msg: "bad arity {} {}", #n_fields, items.len())?;
+            #croot::err_at!(FailConvert, msg: "bad arity {} {}", #n_fields, items.len())?;
         }
     };
 
@@ -176,7 +176,7 @@ fn from_cbor_to_struct(
     quote! {
         impl#generics #croot::cbor::FromCbor for #name#generics #where_clause {
             fn from_cbor(value: #croot::cbor::Cbor) -> #croot::Result<#name#generics> {
-                use #croot::{cbor::IntoCbor, Error, err_at};
+                use #croot::{cbor::IntoCbor, Error};
 
                 let mut items = Vec::<#croot::cbor::Cbor>::from_cbor(value)?;
 
@@ -291,7 +291,7 @@ fn from_cbor_to_enum(
     let preamble = quote! {
         // validate the cbor msg for this type.
         if items.len() < 2 {
-            err_at!(FailConvert, msg: "empty msg for {}", #name_lit)?;
+            #croot::err_at!(FailConvert, msg: "empty msg for {}", #name_lit)?;
         }
         let data_id = items.remove(0);
         let type_id: #croot::cbor::Cbor= {
@@ -299,7 +299,7 @@ fn from_cbor_to_enum(
             #croot::cbor::Tag::from_identifier(id).into()
         };
         if data_id != type_id {
-            err_at!(FailConvert, msg: "bad {}", #name_lit)?
+            #croot::err_at!(FailConvert, msg: "bad {}", #name_lit)?
         }
 
         let variant_name = String::from_cbor(items.remove(0))?;
@@ -314,7 +314,7 @@ fn from_cbor_to_enum(
                 quote! {
                    #variant_lit => {
                         if #n_fields != items.len() {
-                            err_at!(
+                            #croot::err_at!(
                                 FailConvert, msg: "bad arity {} {}",
                                 #n_fields, items.len()
                             )?;
@@ -327,7 +327,7 @@ fn from_cbor_to_enum(
                 quote! {
                     #variant_lit => {
                         if #n_fields != items.len() {
-                            err_at!(
+                            #croot::err_at!(
                                 FailConvert, msg: "bad arity {} {}",
                                 #n_fields, items.len()
                             )?;
@@ -339,7 +339,9 @@ fn from_cbor_to_enum(
                 quote! {
                     #variant_lit => {
                         if items.len() > 0 {
-                            err_at!(FailConvert, msg: "bad arity {}", items.len())?;
+                            #croot::err_at!(
+                                FailConvert, msg: "bad arity {}", items.len()
+                            )?;
                         }
                     }
                 }
@@ -382,7 +384,7 @@ fn from_cbor_to_enum(
     quote! {
         impl#generics #croot::cbor::FromCbor for #name#generics #where_clause {
             fn from_cbor(value: #croot::cbor::Cbor) -> #croot::Result<#name#generics> {
-                use #croot::{cbor::IntoCbor, Error, err_at};
+                use #croot::{cbor::IntoCbor, Error};
 
                 let mut items =  Vec::<#croot::cbor::Cbor>::from_cbor(value)?;
 
@@ -390,14 +392,14 @@ fn from_cbor_to_enum(
 
                 match variant_name.as_str() {
                     #check_variants
-                    _ => err_at!(
+                    _ => #croot::err_at!(
                         FailConvert, msg: "invalid variant_name {}", variant_name
                     )?,
                 }
 
                 let val = match variant_name.as_str() {
                     #tok_variants
-                    _ => err_at!(
+                    _ => #croot::err_at!(
                         FailConvert, msg: "invalid variant_name {}", variant_name
                     )?,
                 };
