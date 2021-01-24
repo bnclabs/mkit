@@ -1,3 +1,5 @@
+use rand::{prelude::random, rngs::SmallRng, Rng, SeedableRng};
+
 use super::*;
 
 #[test]
@@ -113,4 +115,205 @@ fn test_entry_merge() {
     entry.delete(16);
 
     assert_eq!(one.merge(&two), entry);
+}
+
+#[test]
+fn test_purge_mono() {
+    let seed: u128 = random();
+    // let seed: u128 = 55460639888202704213451510247183500784;
+    println!("test_purge_mono {}", seed);
+    let mut rng = SmallRng::from_seed(seed.to_le_bytes());
+
+    for _ in 0..100 {
+        let (value, seqno) = (100_u64, 1);
+        let mut entry = match rng.gen::<u8>() % 2 {
+            0 => Entry::new(10_u64, value, seqno),
+            1 => Entry::new_deleted(10_u64, seqno),
+            _ => unreachable!(),
+        };
+
+        for i in 0..1000 {
+            match rng.gen::<u8>() % 2 {
+                0 => entry.insert(value + i, seqno + i),
+                1 => entry.delete(seqno + 1),
+                _ => unreachable!(),
+            }
+        }
+
+        if entry.is_deleted() {
+            assert_eq!(entry.purge(Cutoff::Mono), None);
+        } else {
+            let value = entry.to_value();
+            let seqno = entry.to_seqno();
+
+            let entry = entry.purge(Cutoff::Mono).unwrap();
+            assert_eq!(entry.deltas.len(), 0);
+            assert_eq!(entry.to_value(), value);
+            assert_eq!(entry.to_seqno(), seqno);
+        }
+    }
+}
+
+#[test]
+fn test_purge_lsm() {
+    use std::ops::RangeBounds;
+
+    let seed: u128 = random();
+    // let seed: u128 = 97177838929013801741121704795542894024;
+    println!("test_purge_lsm {}", seed);
+    let mut rng = SmallRng::from_seed(seed.to_le_bytes());
+
+    for _ in 0..100 {
+        let (value, seqno) = (100_u64, 1);
+        let mut entry = match rng.gen::<u8>() % 2 {
+            0 => Entry::new(10_u64, value, seqno),
+            1 => Entry::new_deleted(10_u64, seqno),
+            _ => unreachable!(),
+        };
+
+        for i in 1..1000 {
+            match rng.gen::<u8>() % 2 {
+                0 => entry.insert(value + i, seqno + i),
+                1 => entry.delete(seqno + i),
+                _ => unreachable!(),
+            }
+        }
+
+        let curr_seqno = entry.to_seqno();
+        let cutoff_seqno = match rng.gen::<u8>() % 4 {
+            0 => u64::MIN,
+            1 => u64::MAX,
+            2 => rng.gen::<u64>() % curr_seqno,
+            3 => rng.gen::<u64>() % (curr_seqno + 1),
+            _ => unreachable!(),
+        };
+
+        let (cutoff, start) = match rng.gen::<u8>() % 3 {
+            0 => (Bound::Unbounded, Bound::Excluded(curr_seqno)),
+            1 => (Bound::Included(cutoff_seqno), Bound::Excluded(cutoff_seqno)),
+            2 => (Bound::Excluded(cutoff_seqno), Bound::Included(cutoff_seqno)),
+            _ => unreachable!(),
+        };
+
+        let range = (start, Bound::Excluded(curr_seqno + 1));
+        match entry.clone().purge(Cutoff::Lsm(cutoff)) {
+            None => {
+                let b = entry
+                    .to_values()
+                    .iter()
+                    .any(|v| range.contains(&v.to_seqno()));
+                assert!(
+                    !b,
+                    "None ... \n{:?}\n{:?}\n {:?}",
+                    cutoff,
+                    range,
+                    entry.to_values()
+                );
+            }
+            Some(purged) => {
+                let b = purged
+                    .to_values()
+                    .iter()
+                    .all(|v| range.contains(&v.to_seqno()));
+                assert!(
+                    b,
+                    "Some ...\n{:?}\n{:?}\n{:?}\n{:?}",
+                    cutoff,
+                    range,
+                    entry.to_values(),
+                    purged.to_values()
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn test_purge_tombstone() {
+    let seed: u128 = random();
+    // let seed: u128 = 97177838929013801741121704795542894024;
+    println!("test_purge_lsm {}", seed);
+    let mut rng = SmallRng::from_seed(seed.to_le_bytes());
+
+    for _ in 0..100 {
+        let (value, seqno) = (100_u64, 1);
+        let mut entry = match rng.gen::<u8>() % 2 {
+            0 => Entry::new(10_u64, value, seqno),
+            1 => Entry::new_deleted(10_u64, seqno),
+            _ => unreachable!(),
+        };
+
+        for i in 1..1000 {
+            match rng.gen::<u8>() % 2 {
+                0 => entry.insert(value + i, seqno + i),
+                1 => entry.delete(seqno + i),
+                _ => unreachable!(),
+            }
+        }
+
+        let curr_seqno = entry.to_seqno();
+
+        if entry.is_deleted() {
+            assert_eq!(
+                entry
+                    .clone()
+                    .purge(Cutoff::Tombstone(Bound::Included(curr_seqno))),
+                None
+            );
+            assert_eq!(
+                entry
+                    .clone()
+                    .purge(Cutoff::Tombstone(Bound::Excluded(curr_seqno + 1))),
+                None
+            );
+            assert_eq!(
+                entry
+                    .clone()
+                    .purge(Cutoff::Tombstone(Bound::Excluded(curr_seqno)))
+                    .unwrap(),
+                entry
+            );
+            assert_eq!(
+                entry.clone().purge(Cutoff::Tombstone(Bound::Unbounded)),
+                None
+            );
+
+            assert_eq!(
+                entry
+                    .clone()
+                    .purge(Cutoff::Tombstone(Bound::Included(curr_seqno - 1)))
+                    .unwrap(),
+                entry
+            );
+            assert_eq!(
+                entry
+                    .clone()
+                    .purge(Cutoff::Tombstone(Bound::Excluded(curr_seqno - 1)))
+                    .unwrap(),
+                entry
+            );
+        } else {
+            assert_eq!(
+                entry
+                    .clone()
+                    .purge(Cutoff::Tombstone(Bound::Included(curr_seqno)))
+                    .unwrap(),
+                entry
+            );
+            assert_eq!(
+                entry
+                    .clone()
+                    .purge(Cutoff::Tombstone(Bound::Excluded(curr_seqno)))
+                    .unwrap(),
+                entry
+            );
+            assert_eq!(
+                entry
+                    .clone()
+                    .purge(Cutoff::Tombstone(Bound::Unbounded))
+                    .unwrap(),
+                entry
+            );
+        }
+    }
 }
