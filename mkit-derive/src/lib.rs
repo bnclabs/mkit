@@ -82,7 +82,7 @@ fn from_struct_to_cbor(
 
     let token_fields = match fields {
         Fields::Unit => quote! {},
-        Fields::Named(fields) => named_fields_to_cbor(fields),
+        Fields::Named(fields) => named_fields_to_cbor(fields, croot.clone()),
         Fields::Unnamed(_) => {
             abort_call_site!("unnamed struct not supported for Cborize {}", name)
         }
@@ -229,7 +229,7 @@ fn from_enum_to_cbor(
                 quote! { #name::#variant_name => #variant_lit.into_cbor()? }
             }
             Fields::Named(fields) => {
-                let (params, body) = named_var_fields_to_cbor(fields);
+                let (params, body) = named_var_fields_to_cbor(fields, croot.clone());
                 quote! {
                     #name::#variant_name{#params} => {
                         items.push(#variant_lit.into_cbor()?);
@@ -409,14 +409,14 @@ fn from_cbor_to_enum(
     }
 }
 
-fn named_fields_to_cbor(fields: &FieldsNamed) -> TokenStream {
+fn named_fields_to_cbor(fields: &FieldsNamed, croot: TokenStream) -> TokenStream {
     let mut tokens = TokenStream::new();
     for field in fields.named.iter() {
         let is_bytes = is_bytes_ty(&field.ty);
 
         match &field.ident {
             Some(field_name) if is_bytes => tokens.extend(quote! {
-                items.push(mkit::cbor::Cbor::bytes_into_cbor(value.#field_name)?);
+                items.push(#croot::cbor::Cbor::bytes_into_cbor(value.#field_name)?);
             }),
             Some(field_name) => tokens.extend(quote! {
                 items.push(value.#field_name.into_cbor()?);
@@ -427,7 +427,10 @@ fn named_fields_to_cbor(fields: &FieldsNamed) -> TokenStream {
     tokens
 }
 
-fn named_var_fields_to_cbor(fields: &FieldsNamed) -> (TokenStream, TokenStream) {
+fn named_var_fields_to_cbor(
+    fields: &FieldsNamed,
+    croot: TokenStream,
+) -> (TokenStream, TokenStream) {
     let mut params = TokenStream::new();
     let mut body = TokenStream::new();
     for field in fields.named.iter() {
@@ -438,7 +441,7 @@ fn named_var_fields_to_cbor(fields: &FieldsNamed) -> (TokenStream, TokenStream) 
 
         match &field.ident {
             Some(field_name) if is_bytes => body.extend(quote! {
-                items.push(mkit::cbor::Cbor::bytes_into_cbor(#field_name)?);
+                items.push(#croot::cbor::Cbor::bytes_into_cbor(#field_name)?);
             }),
             Some(field_name) => body.extend(quote! {
                 items.push(#field_name.into_cbor()?);

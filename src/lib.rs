@@ -59,7 +59,7 @@ pub mod db;
 pub mod nobitmap;
 pub mod spinlock;
 pub mod thread;
-// mod xorfilter;
+mod xorfilter;
 
 #[doc(hidden)]
 pub use mkit_derive::Cborize;

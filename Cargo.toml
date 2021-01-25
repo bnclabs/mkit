@@ -14,6 +14,7 @@ edition = "2018"
 [dependencies]
 log = "0.4.8"
 mkit-derive = { path = "mkit-derive", version = "=0.2.0" }
+xorfilter-rs = { path = "../xorfilter", version = "0.2.0"}
 arbitrary = { version = "0.4", features = ["derive"] }
 
 [dev-dependencies]
