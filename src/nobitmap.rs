@@ -4,7 +4,7 @@ use std::{convert::Infallible, hash::Hash};
 use crate::db::Bloom;
 
 /// Useful as type-parameter that implement a no-op bloom-filter.
-#[derive(Clone, Default)]
+#[derive(Clone, Default, Eq, PartialEq, Debug)]
 pub struct NoBitmap;
 
 impl Bloom for NoBitmap {
