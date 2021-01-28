@@ -12,8 +12,15 @@ pub trait BuildIndex<K, V, D, B> {
 
     /// Build an index form iterator. Optionally a bitmap can be specified to
     /// implement a bloom filter. If bitmap filter is not required, pass bitmap
-    /// as `NoBitmap`.
-    fn build_index<I>(&mut self, iter: I, bitmap: B) -> Result<(), Self::Err>
+    /// as `NoBitmap`. `seqno` can be supplied to set the snapshot's seqno, if
+    /// supplied as None, snapshot will take is latest-seqno as the high seqno
+    /// found in the iterated entries.
+    fn build_index<I>(
+        &mut self,
+        iter: I,
+        bitmap: B,
+        seqno: Option<u64>,
+    ) -> Result<(), Self::Err>
     where
         I: Iterator<Item = Entry<K, V, D>>;
 }
