@@ -194,6 +194,10 @@ impl<K, V, D> Entry<K, V, D> {
             }
         };
     }
+
+    pub fn drain_deltas(&mut self) {
+        self.deltas.drain(..);
+    }
 }
 
 impl<K, V, D> Entry<K, V, D> {
