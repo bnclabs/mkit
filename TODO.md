@@ -1,3 +1,4 @@
+* err_at!() to include backtrace if available, review all errors.
 * Instead of custom Error try to use one of the stdlib error.
 * Implement a command line tool to serialize cbor value into bytes and deserialize them
   back and render their shape and content on terminal.
