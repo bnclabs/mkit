@@ -1,6 +1,6 @@
 [package]
 name = "mkit"
-version = "0.3.0"
+version = "0.4.0"
 description = "Tools and macros for distributed and peer-to-peer applications"
 repository = "https://github.com/bnclabs/mkit"
 documentation = "https://docs.rs/mkit/"
@@ -19,8 +19,8 @@ debug = true
 
 [dependencies]
 log = "0.4.8"
-mkit-derive = { path = "mkit-derive", version = "=0.2.0" }
-xorfilter-rs = { path = "../xorfilter", version = "0.2.0"}
+mkit-derive = { path = "mkit-derive", version = "=0.3.0" }
+xorfilter-rs = { path = "../xorfilter", version = "0.3.0"}
 arbitrary = { version = "0.4", features = ["derive"] }
 
 [dev-dependencies]
