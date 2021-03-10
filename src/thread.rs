@@ -20,7 +20,7 @@ use crate::{Error, Result};
 /// channel.
 ///
 /// The clone behavior is similar to [mpsc::Sender] or, [mpsc::SyncSender].
-pub enum Tx<Q, R> {
+pub enum Tx<Q, R = ()> {
     N(mpsc::Sender<(Q, Option<mpsc::Sender<R>>)>),
     S(mpsc::SyncSender<(Q, Option<mpsc::Sender<R>>)>),
 }
@@ -58,7 +58,7 @@ impl<Q, R> Tx<Q, R> {
 /// IPC type, that shall be passed to the thread's main loop.
 ///
 /// Refer to [Thread::new] for details.
-pub type Rx<Q, R> = mpsc::Receiver<(Q, Option<mpsc::Sender<R>>)>;
+pub type Rx<Q, R = ()> = mpsc::Receiver<(Q, Option<mpsc::Sender<R>>)>;
 
 /// Thread type, providing gen-server pattern to do multi-threading.
 ///
@@ -69,7 +69,7 @@ pub type Rx<Q, R> = mpsc::Receiver<(Q, Option<mpsc::Sender<R>>)>;
 /// * The thread's main loop should handle _disconnect_ signal on its
 ///   [Rx] channel.
 /// * Call `close_wait()` on the [Thread] instance.
-pub struct Thread<Q, R, T> {
+pub struct Thread<Q, R = (), T = ()> {
     name: String,
     inner: Option<Inner<Q, R, T>>,
 }
