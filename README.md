@@ -12,15 +12,28 @@ to build distributed, peer-to-peer applications.
 * __traits for db__, BuildIndex, Bloom.
 * __xor-filter__, implement Bloom trait for [xorfilter][xorfilter] type.
 
+Useful links
+------------
+
+* [xorfilter][xorfilter-blog] by Daniel Lemire.
+* [Wiki link][spinlock] on spinlock.
+* [RFC specification][cbor-rfc] for CBOR.
+
 Contribution
 ------------
 
-* Simple workflow. Fork, modify and raise a pull request.
-* Before making a PR,
-  * [Install][spellcheck] and run `cargo spellcheck` to remove common spelling mistakes.
+* Simple workflow. Fork - Modify - Pull request.
+* Before creating a PR,
+  * Run `make build` to confirm all versions of build is passing with
+    0 warnings and 0 errors.
   * Run `check.sh` with 0 warnings, 0 errors and all testcases passing.
+  * Run `perf.sh` with 0 warnings, 0 errors and all testcases passing.
+  * [Install][spellcheck] and run `cargo spellcheck` to remove common spelling mistakes.
 * [Developer certificate of origin][dco] is preferred.
 
+[xorfilter]: https://github.com/bnclabs/xorfilter
+[xorfilter-blog]: https://lemire.me/blog/2019/12/19/xor-filters-faster-and-smaller-than-bloom-filters/
+[spinlock]: https://en.wikipedia.org/wiki/Spinlock
+[cbor-rfc]: https://tools.ietf.org/html/rfc7049
 [spellcheck]: https://github.com/drahnr/cargo-spellcheck
 [dco]: https://developercertificate.org/
-[xorfilter]: https://github.com/bnclabs/xorfilter
