@@ -4,3 +4,6 @@ arc.check
 rc.check
 test.out
 Cargo.lock
+flamegraph.svg
+perf.out
+check.out

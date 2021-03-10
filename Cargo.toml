@@ -2,14 +2,20 @@
 name = "mkit"
 version = "0.3.0"
 description = "Tools and macros for distributed and peer-to-peer applications"
-authors = ["prataprc <prataprc@gmail.com>"]
-documentation = "https://docs.rs/mkit/"
 repository = "https://github.com/bnclabs/mkit"
+documentation = "https://docs.rs/mkit/"
 keywords = ["cbor"]
 categories = ["encoding", "concurrency"]
+authors = ["prataprc <prataprc@gmail.com>"]
 license = "MIT"
-readme = "README.md"
 edition = "2018"
+readme = "README.md"
+
+[profile.release]
+debug = true
+
+[profile.bench]
+debug = true
 
 [dependencies]
 log = "0.4.8"

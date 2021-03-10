@@ -6,6 +6,11 @@ to build distributed, peer-to-peer applications.
 * __cbor__, Concise Binary Object Representation (CBOR) implementation.
 * __thread__, a Thread type for multi-threading associated channel types
   for inter-process-communication.
+* __spinlock__, for non-blocking read-write locking using atomic load/store/cas.
+* __traits for data__, Diff.
+* __types for db__, Entry, Value, Delta, Cutoff.
+* __traits for db__, BuildIndex, Bloom.
+* __xor-filter__, implement Bloom trait for [xorfilter][xorfilter] type.
 
 Contribution
 ------------
@@ -18,3 +23,4 @@ Contribution
 
 [spellcheck]: https://github.com/drahnr/cargo-spellcheck
 [dco]: https://developercertificate.org/
+[xorfilter]: https://github.com/bnclabs/xorfilter
