@@ -1,5 +1,7 @@
 #! /usr/bin/env bash
 
+export RUST_BACKTRACE=full
+export RUSTFLAGS=-g
 exec > check.out
 exec 2>&1
 
