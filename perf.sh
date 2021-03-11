@@ -3,4 +3,4 @@ exec 2>&1
 
 set -o xtrace
 
-# Add as per need
+date; time cargo +nightly bench -- --nocapture || exit $?
