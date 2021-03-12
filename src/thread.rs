@@ -51,7 +51,7 @@ impl<Q, R> Tx<Q, R> {
             Tx::N(tx) => err_at!(IPCFail, tx.send((request, Some(stx))))?,
             Tx::S(tx) => err_at!(IPCFail, tx.send((request, Some(stx))))?,
         }
-        Ok(err_at!(IPCFail, srx.recv())?)
+        err_at!(IPCFail, srx.recv())
     }
 }
 

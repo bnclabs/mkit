@@ -1098,7 +1098,7 @@ convert_pos_num! {u64 u32 u16 u8}
 impl IntoCbor for usize {
     fn into_cbor(self) -> Result<Cbor> {
         let val = err_at!(FailConvert, u64::try_from(self))?;
-        Ok(val.into_cbor()?)
+        val.into_cbor()
     }
 }
 

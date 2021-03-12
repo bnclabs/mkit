@@ -101,7 +101,11 @@ impl<T> Spinlock<T> {
             let old = self.latchlock.load(SeqCst);
             if (old & Self::LATCH_LOCK_FLAG) == 0 {
                 // latch is not acquired by a writer
-                if self.latchlock.compare_and_swap(old, old + 1, SeqCst) == old {
+                if self
+                    .latchlock
+                    .compare_exchange(old, old + 1, SeqCst, SeqCst)
+                    .is_ok()
+                {
                     if cfg!(feature = "debug") {
                         self.read_locks.fetch_add(1, SeqCst);
                     }
@@ -124,7 +128,11 @@ impl<T> Spinlock<T> {
                     panic!("if latch is flipped-off, lock can't be flipped-on !");
                 }
                 let new = old | Self::LATCH_FLAG;
-                if self.latchlock.compare_and_swap(old, new, SeqCst) == old {
+                if self
+                    .latchlock
+                    .compare_exchange(old, new, SeqCst, SeqCst)
+                    .is_ok()
+                {
                     break;
                 }
             }
@@ -137,12 +145,18 @@ impl<T> Spinlock<T> {
             let old = self.latchlock.load(SeqCst);
             if (old & Self::READERS_FLAG) == 0 {
                 let new = old | Self::LOCK_FLAG;
-                if self.latchlock.compare_and_swap(old, new, SeqCst) == old {
+                if self
+                    .latchlock
+                    .compare_exchange(old, new, SeqCst, SeqCst)
+                    .is_ok()
+                {
                     if cfg!(feature = "debug") {
                         self.write_locks.fetch_add(1, SeqCst);
                     }
-                    let door =
-                        unsafe { ((self as *const Self) as *mut Self).as_mut().unwrap() };
+                    let door = unsafe {
+                        let door = self as *const Self as *mut Self;
+                        door.as_mut().unwrap()
+                    };
                     break WriteGuard { door };
                 }
                 panic!("latch is acquired, ZERO readers, but unable to lock !")
@@ -210,7 +224,12 @@ impl<'a, T> Drop for WriteGuard<'a, T> {
         if (old & Spinlock::<T>::READERS_FLAG) > 0 {
             panic!("can't have active readers, when lock is held");
         }
-        if self.door.latchlock.compare_and_swap(old, 0, SeqCst) != old {
+        if self
+            .door
+            .latchlock
+            .compare_exchange(old, 0, SeqCst, SeqCst)
+            .is_err()
+        {
             panic!("cant' have readers/writers to modify when locked")
         }
     }

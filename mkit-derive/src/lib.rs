@@ -109,7 +109,7 @@ fn from_struct_to_cbor(
                 #preamble
                 #token_fields;
 
-                Ok(items.into_cbor()?)
+                items.into_cbor()
             }
         }
     }
@@ -273,7 +273,7 @@ fn from_enum_to_cbor(
                 match value {
                     #tok_variants
                 }
-                Ok(items.into_cbor()?)
+                items.into_cbor()
             }
         }
     }

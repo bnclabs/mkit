@@ -1,7 +1,6 @@
 //! Package implement collection of tools and traits for building
 //! distributed applications.
 
-#![feature(min_const_generics)]
 #![feature(total_cmp)]
 #![allow(clippy::many_single_char_names)]
 
