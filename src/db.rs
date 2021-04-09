@@ -54,6 +54,22 @@ pub trait Bloom: Sized + Default {
     fn or(&self, other: &Self) -> Result<Self, Self::Err>;
 }
 
+pub trait Lookup<K, V> {
+    fn get<Q>(&self, key: &Q) -> Option<V>
+    where
+        K: Borrow<Q>,
+        Q: PartialEq;
+
+    fn set(&mut self, key: K, value: V) -> Option<V>
+    where
+        K: PartialEq;
+
+    fn remove<Q>(&mut self, key: &Q) -> Option<V>
+    where
+        K: Borrow<Q>,
+        Q: PartialEq;
+}
+
 const ENTRY_VER: u32 = 0x0001;
 const VALUE_VER: u32 = 0x0001;
 const DELTA_VER: u32 = 0x0001;
