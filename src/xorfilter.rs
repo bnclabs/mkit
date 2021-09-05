@@ -73,8 +73,8 @@ where
         self.populate_keys(&[u64::from(digest)])
     }
 
-    fn build(&mut self) {
-        self.build()
+    fn build(&mut self) -> Result<()> {
+        err_at!(Fatal, self.build())
     }
 
     fn contains<Q: ?Sized + Hash>(&self, element: &Q) -> bool {

@@ -4,7 +4,7 @@ use std::{borrow::Borrow, fmt, hash::Hash, ops::Bound};
 
 #[allow(unused_imports)]
 use crate::data::{Diff, NoDiff};
-use crate::LocalCborize;
+use crate::{Error, LocalCborize};
 
 /// Trait to bulk-add entries into an index.
 pub trait BuildIndex<K, V, D, B> {
@@ -38,7 +38,7 @@ pub trait Bloom: Sized + Default {
     /// Build keys, added so far via `add_key` and `add_digest32` into the
     /// bitmap index. Useful for types that support batch building and
     /// immutable bitmap index.
-    fn build(&mut self);
+    fn build(&mut self) -> Result<(), Error>;
 
     /// Check whether key in present, there can be false positives but
     /// no false negatives.

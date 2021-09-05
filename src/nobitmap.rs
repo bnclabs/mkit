@@ -1,7 +1,7 @@
 //! Module implement a default bitmap filter type.
 use std::{convert::Infallible, hash::Hash};
 
-use crate::db::Bloom;
+use crate::{db::Bloom, Error};
 
 /// Useful as type-parameter that implement a no-op bloom-filter.
 #[derive(Clone, Default, Eq, PartialEq, Debug)]
@@ -14,7 +14,9 @@ impl Bloom for NoBitmap {
 
     fn add_digest32(&mut self, _digest: u32) {}
 
-    fn build(&mut self) {}
+    fn build(&mut self) -> Result<(), Error> {
+        Ok(())
+    }
 
     fn contains<Q: ?Sized + Hash>(&self, _element: &Q) -> bool {
         true
