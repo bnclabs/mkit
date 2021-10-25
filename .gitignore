@@ -7,3 +7,4 @@ Cargo.lock
 flamegraph.svg
 perf.out
 check.out
+target

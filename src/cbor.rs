@@ -170,13 +170,13 @@ impl Cbor {
                 let n = encode_hdr(major, *info, w)?;
                 let m =
                     encode_addnl(err_at!(FailConvert, u64::try_from(byts.len()))?, w)?;
-                write_w!(w, &byts);
+                write_w!(w, byts);
                 n + m + byts.len()
             }
             Cbor::Major3(info, text) => {
                 let n = encode_hdr(major, *info, w)?;
                 let m = encode_addnl(err_at!(FailCbor, u64::try_from(text.len()))?, w)?;
-                write_w!(w, &text);
+                write_w!(w, text);
                 n + m + text.len()
             }
             Cbor::Major4(info, list) => {

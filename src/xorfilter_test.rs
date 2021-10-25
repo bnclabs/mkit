@@ -15,7 +15,7 @@ fn test_basic7() {
     let filter = {
         let mut filter = Xor8::<BuildHasherDefault>::new();
         filter.populate(&keys);
-        filter.build();
+        filter.build().expect("failed to build filter");
         filter
     };
 

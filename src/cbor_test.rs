@@ -32,7 +32,7 @@ fn test_simple_value() {
             (order, sval) => panic!("{} {:?}", order, sval),
         }
 
-        let val: Cbor = match (&sval, sval.clone().into_cbor()) {
+        let val: Cbor = match (&sval, sval.into_cbor()) {
             (Unassigned, Err(_)) => continue,
             (Undefined, Err(_)) => continue,
             (Reserved24(_), Err(_)) => continue,
