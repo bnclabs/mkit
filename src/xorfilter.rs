@@ -3,6 +3,7 @@ use xorfilter::Xor8;
 use std::{
     hash::{BuildHasher, Hash},
     result,
+    sync::Arc,
 };
 
 use crate::{
@@ -18,7 +19,7 @@ struct CborXor8 {
     hash_builder: Vec<u8>,
     seed: u64,
     block_length: u32,
-    finger_prints: Vec<u8>,
+    finger_prints: Arc<Vec<u8>>,
 }
 
 impl CborXor8 {

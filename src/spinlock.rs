@@ -124,9 +124,10 @@ impl<T> Spinlock<T> {
             let old = self.latchlock.load(SeqCst);
             if (old & Self::LATCH_FLAG) == 0 {
                 // latch is not acquired by a writer
-                if (old & Self::LOCK_FLAG) != 0 {
-                    panic!("if latch is flipped-off, lock can't be flipped-on !");
-                }
+                assert!(
+                    !((old & Self::LOCK_FLAG) != 0),
+                    "if latch is flipped-off, lock can't be flipped-on !"
+                );
                 let new = old | Self::LATCH_FLAG;
                 if self
                     .latchlock
@@ -221,9 +222,10 @@ impl<'a, T> DerefMut for WriteGuard<'a, T> {
 impl<'a, T> Drop for WriteGuard<'a, T> {
     fn drop(&mut self) {
         let old = self.door.latchlock.load(SeqCst);
-        if (old & Spinlock::<T>::READERS_FLAG) > 0 {
-            panic!("can't have active readers, when lock is held");
-        }
+        assert!(
+            !((old & Spinlock::<T>::READERS_FLAG) > 0),
+            "can't have active readers, when lock is held"
+        );
         if self
             .door
             .latchlock
